@@ -1,8 +1,9 @@
 # Clubera
 
+<img src="https://www.clubera.dev/logo.png" align="right" width="200" alt="Texto Alternativo">
+
 > Sistema para reserva de quadras esportivas online.
 
-![Logo Clubera](https://www.clubera.dev/logo.png)
 
 O **Clubera** é uma plataforma web que centraliza o gerenciamento de clubes, quadras, horários e reservas esportivas. O projeto é composto por:
 
