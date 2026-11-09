@@ -1,1 +1,432 @@
-# PI-AMS-Clubera
+# Clubera
+
+> Sistema para reserva de quadras esportivas online.
+
+![Logo Clubera](https://www.clubera.dev/logo.png)
+
+O **Clubera** é uma plataforma web que centraliza o gerenciamento de clubes, quadras, horários e reservas esportivas. O projeto é composto por:
+
+- **Frontend:** interface web em **Angular 21** com **Tailwind CSS** e **daisyUI**.
+- **API:** API REST em **.NET 10** com **Entity Framework Core** e **SQL Server**.
+
+---
+
+## Sobre o projeto
+
+### História
+
+O Clubera nasceu como projeto acadêmico da **Fatec Taquaritinga**. A motivação veio de um problema comum: o gerenciamento de reservas de quadras esportivas, quando feito de forma manual (planilhas, mensagens, ligações), gera conflitos de horário, perda de informação e muito retrabalho para quem administra o espaço.
+
+A proposta é um sistema web que centraliza o controle de quadras, horários e reservas, tornando o processo mais organizado, eficiente e prático tanto para quem administra quanto para quem joga.
+
+### Objetivo
+
+Desenvolver uma aplicação que facilite o gerenciamento e a reserva de quadras esportivas, reduzindo conflitos de agenda e facilitando o controle das informações.
+
+### Como o projeto é construído
+
+O desenvolvimento envolve levantamento de requisitos, modelagem, implementação e testes das funcionalidades. Ferramentas de inteligência artificial (Claude e GitHub Copilot) são usadas como apoio na implementação e na resolução de dúvidas técnicas.
+
+### Equipe
+
+| Papel | Nome |
+|---|---|
+| Desenvolvedor | Felipe Adrian Lourenço Barbisan |
+| Desenvolvedor | Felipe Gabriel Galati de Oliveira |
+| Orientador | Gustavo Henrique del Vechio |
+
+Fatec Taquaritinga — 2026
+
+> ⚠️ O sistema está **em desenvolvimento**. Algumas funcionalidades podem mudar ou ainda não estar completas.
+
+---
+
+## Funcionalidades
+
+### Para jogadores
+
+- **Busca de clubes e quadras:** listagens paginadas com filtro por nome, cidade e modalidade esportiva. A cidade é detectada automaticamente por geolocalização (com fallback silencioso caso a permissão seja negada).
+- **Página inicial personalizada:** clubes em destaque e clubes perto de você, com carrossel de fotos.
+- **Detalhes do clube:** galeria de imagens, endereço completo, mapa incorporado, modalidades e quadras disponíveis.
+- **Reservas:** escolha da quadra, da data (próximos 7 dias) e do horário, com confirmação em modal. A API aplica regras de antecedência para criação e cancelamento.
+- **Disponibilidade em tempo real:** os horários são atualizados na tela via **SignalR** (agrupado por clube), sem recarregar a página.
+- **Minhas reservas:** listagem com busca, filtro por status, paginação e cancelamento.
+- **Perfil:** edição de nome e telefone, troca de avatar com pré-visualização e validação de tamanho (até 5 MB).
+
+### Para administradores de clubes
+
+- **Planos e assinatura:** acesso por assinatura, com escolha do plano, pagamento via **Mercado Pago (Checkout Pro)** com redirecionamento ao checkout, validação de assinatura do webhook, acompanhamento da confirmação do pagamento, histórico de pagamentos e cancelamento da assinatura.
+- **Gestão de clubes:** cadastro de clubes com upload de fotos e preenchimento automático de endereço pelo CEP (**ViaCEP**).
+- **Painel do clube:**
+  - **Visão geral:** quadras, reservas do dia, jogadores e reservas recentes.
+  - **Quadras:** CRUD completo com tipo, superfície, cobertura, preço e imagens. Cada quadra pode ser vinculada a um ou mais esportes.
+  - **Horários:** criação individual ou em massa (por dias da semana e duração do slot).
+  - **Reservas:** listagem com busca, filtros, paginação, dados do jogador, contato por WhatsApp e cancelamento.
+  - **Configurações:** edição do clube, até 5 fotos, com reordenação por *drag and drop*.
+
+### Contas e autenticação
+
+- Cadastro com e-mail e senha ou com **Google**.
+- Verificação de e-mail (com reenvio do link) e redefinição de senha.
+- Cadastro em duas etapas, em conformidade com a **LGPD**: conclusão de perfil na segunda etapa (telefone, CPF e data de nascimento), com validação de CPF.
+- CPF armazenado criptografado (**AES-256-GCM**) com hash **HMAC-SHA256** para detecção de duplicidade.
+- Sessão via cookies (`withCredentials`), com restauração automática ao abrir o app.
+- Tema **claro/escuro** salvo no navegador.
+
+### Outros recursos
+
+- **Imagens:** upload com geração de três variantes (Thumb, Medium e Full) usando SkiaSharp. Armazenamento local ou em Azure Blob Storage.
+- **Limpeza automática:** serviços em segundo plano para rotinas de manutenção (ex.: limpeza de reservas antigas).
+
+---
+
+## Stack
+
+| Camada | Tecnologia |
+|---|---|
+| Frontend | Angular 21, TypeScript (strict) |
+| Estilo | Tailwind CSS + daisyUI |
+| Reatividade | Signals e RxJS |
+| Tempo real | SignalR (`@microsoft/signalr` no cliente) |
+| Máscaras de input | `ngx-mask` |
+| Calendário | `cally` |
+| Login social | Google Identity Services |
+| API | .NET 10, ASP.NET Core |
+| Persistência | Entity Framework Core, SQL Server |
+| Pagamentos | Mercado Pago |
+| Imagens | SkiaSharp |
+| Integrações externas | ViaCEP (endereço por CEP), Nominatim/OpenStreetMap (geocodificação reversa), Google Maps (mapa incorporado) |
+| Infra | Docker, Docker Compose, GitHub Actions, GHCR |
+
+Fontes do frontend: **Roboto** (texto) e **Space Grotesk** (destaques).
+
+---
+
+## Arquitetura
+
+### Frontend
+
+Aplicação **Angular standalone** (sem NgModules), organizada por responsabilidade:
+
+```
+src/app/
+├── core/          # Serviços globais, guards, interceptors e modelos de autenticação
+├── features/      # Funcionalidades, uma pasta por área
+│   ├── admin/     #   Painel do administrador (clubes, quadras, horários, reservas, planos, pagamento)
+│   ├── auth/      #   Login, cadastro, verificação de e-mail, recuperação de senha, perfil
+│   ├── clubs/     #   Listagem e detalhes de clubes e quadras (visão do jogador)
+│   ├── home-page/ #   Página inicial
+│   └── user/      #   Perfil e reservas do jogador
+├── layout/        # MainLayout (navbar + footer) e AdminLayout (menu lateral)
+└── shared/        # Componentes, diretivas, validadores e resolvers reutilizáveis
+```
+
+**Padrões adotados**
+
+- **Signals** para estado local e estado dos serviços (`signal`, `computed`, `asReadonly`).
+- **`ChangeDetectionStrategy.OnPush`** nos componentes.
+- **`inject()`** no lugar de injeção por construtor.
+- **Lazy loading** das rotas com `loadComponent`.
+- **Reactive Forms** com validações e mensagens acessíveis (`aria-invalid`, `aria-describedby`, `role="alert"`).
+- **Control flow nativo** (`@if`, `@for`, `@switch`) nos templates.
+- **`NgOptimizedImage`** para as imagens.
+- Serviços por domínio, com `providedIn: 'root'`, expondo estado de `loading` e `error`.
+- Acessibilidade seguindo as diretrizes **WCAG AA**.
+
+**Rotas e proteção**
+
+| Guard | Função |
+|---|---|
+| `guestGuard` | Impede usuários logados de acessar login e cadastro. |
+| `authGuard` | Exige sessão ativa. |
+| `adminGuard` | Restringe o painel administrativo a usuários com papel de administrador. |
+| `completeProfileGuard` | Direciona quem ainda não concluiu o cadastro. |
+| `selectRoleGuard` | Redireciona administradores à área de gestão. |
+
+Um **interceptor HTTP** envia as credenciais (cookies) em todas as requisições à API e as desativa nas chamadas ao ViaCEP.
+
+### API
+
+Arquitetura em camadas, no estilo "Clean-ish":
+
+```
+Controller → Service → Repository → Mapper → DTO → Validator → EF Configuration
+```
+
+- Controllers sem `try/catch`: um `ExceptionMiddleware` global converte exceções de domínio em respostas padronizadas (`statusCode`, `errorCode`, `message`, `errors`, `traceId`, `timestamp`).
+- Validações com **FluentValidation**, incluindo validadores para CPF, CEP, telefone e UF.
+- Configurações de entidades via `IEntityTypeConfiguration<T>`.
+- Rotinas em background com `BackgroundService` + `PeriodicTimer`.
+
+---
+
+## Rodando localmente
+
+### Pré-requisitos
+
+- **Node.js** (versão compatível com o Angular 21) e **npm**
+- **Angular CLI**: `npm install -g @angular/cli`
+- **Docker** e **Docker Compose** (para a API)
+
+### 1. API (com Docker)
+
+A API é publicada como imagem no **GitHub Container Registry (GHCR)**.
+
+**Pré-requisitos adicionais**
+
+- Um **SQL Server** rodando na rede Docker externa `clubera-network`, com o container chamado `sqlserver-clubes` (é o host usado na connection string)
+- Um arquivo `.env` configurado (veja [Configurando o `.env` da API](#configurando-o-env-da-api))
+
+**Passo a passo**
+
+**1. Crie a rede externa (apenas na primeira vez):**
+
+```bash
+docker network create clubera-network
+```
+
+**2. Suba o banco de dados** (compose do SQL Server do projeto, na mesma rede):
+
+```bash
+docker compose -f docker-compose.db.yml --env-file .env up -d
+```
+
+**3. Crie a pasta de uploads no servidor (apenas na primeira vez):**
+
+```bash
+mkdir -p /DATA/AppData/clubera-api-uploads
+```
+
+> Ela fica **fora** da pasta de trabalho do runner do GitHub Actions de propósito: arquivos enviados por usuários não podem ser apagados por um `git clean` a cada deploy.
+
+**4. Baixe a imagem e suba a API:**
+
+```bash
+docker compose -f docker-compose.api.yml --env-file .env pull
+docker compose -f docker-compose.api.yml --env-file .env up -d
+```
+
+A API ficará disponível em `http://localhost:5000` (porta `5000` do host → `8080` do container).
+
+**Comandos úteis**
+
+```bash
+# Ver logs
+docker logs -f api-clubes
+
+# Parar a API
+docker compose -f docker-compose.api.yml --env-file .env down
+
+# Atualizar para a versão mais recente
+docker compose -f docker-compose.api.yml --env-file .env pull
+docker compose -f docker-compose.api.yml --env-file .env up -d
+```
+
+**Usando outra imagem**
+
+Por padrão o compose usa `ghcr.io/felipebarbisan766/api-clubes:latest`. Para usar outra tag ou imagem, defina `API_IMAGE` no `.env`:
+
+```env
+API_IMAGE=ghcr.io/felipebarbisan766/api-clubes:1.0.0
+```
+
+**Deploy automático**
+
+O compose `docker-compose.api.yml` é o que o **GitHub Actions** recria a cada deploy.
+
+### 2. Frontend
+
+```bash
+# 1. Clone o repositório
+git clone <url-do-repositorio>
+cd <pasta-do-projeto>
+
+# 2. Instale as dependências
+npm install
+
+# 3. Inicie o servidor de desenvolvimento
+ng serve
+```
+
+A aplicação ficará disponível em `http://localhost:4200` e espera a API em `http://localhost:5000`.
+
+**Comandos úteis**
+
+```bash
+# Servidor de desenvolvimento
+ng serve
+
+# Build de produção (saída em dist/)
+ng build
+
+# Testes unitários
+ng test
+```
+
+---
+
+## Configuração
+
+### Ambiente do frontend
+
+Os ambientes ficam em `src/environments/`:
+
+| Arquivo | Uso | `apiUrl` |
+|---|---|---|
+| `environment.development.ts` | Desenvolvimento (`ng serve`) | `http://localhost:5000/api` |
+| `environment.ts` | Produção (`ng build`) | `https://api.clubera.dev/api` |
+
+```ts
+export const environment = {
+  production: false,
+  name: 'development',
+  apiUrl: 'http://localhost:5000/api',
+  googleClientId: 'SEU_CLIENT_ID.apps.googleusercontent.com',
+};
+```
+
+| Variável | Descrição |
+|---|---|
+| `apiUrl` | URL base da API. O hub do SignalR (`/hubs/court-availability`) também é derivado dela. |
+| `googleClientId` | Client ID do Google OAuth, usado no login e no cadastro com Google. Deve ser o mesmo configurado na API (`GOOGLE_CLIENT_ID`). |
+
+### Configurando o `.env` da API
+
+Crie um arquivo `.env` na mesma pasta do `docker-compose.api.yml`. **Nunca commite esse arquivo** — adicione `.env` ao `.gitignore`.
+
+**Modelo**
+
+```env
+# --- Geral ---
+ASPNETCORE_ENVIRONMENT=Production
+API_IMAGE=ghcr.io/felipebarbisan766/api-clubes:latest
+API_BASE_URL=https://api.seudominio.com
+PUBLIC_BASE_URL=https://app.seudominio.com
+
+# --- Banco de dados ---
+MSSQL_SA_PASSWORD=TroqueEstaSenha@123
+
+# --- JWT ---
+JWT_KEY=
+JWT_EMAIL_VERIFICATION_KEY=
+JWT_RESET_PASSWORD_KEY=
+
+# --- Segurança (CPF) ---
+CPF_ENCRYPTION_KEY=
+CPF_HMAC_KEY=
+
+# --- E-mail (SMTP) ---
+EMAIL_SENDER=seu-email@gmail.com
+EMAIL_SMTP_USERNAME=seu-email@gmail.com
+EMAIL_SMTP_PASSWORD=
+
+# --- Azure Storage (deixe vazio se usar armazenamento local) ---
+AZURE_STORAGE_CONNECTION_STRING=
+
+# --- Google ---
+GOOGLE_CLIENT_ID=
+
+# --- Mercado Pago ---
+MERCADOPAGO_ACCESS_TOKEN=
+MERCADOPAGO_WEBHOOK_SECRET=
+```
+
+**Descrição das variáveis**
+
+| Variável | Descrição |
+|---|---|
+| `ASPNETCORE_ENVIRONMENT` | Ambiente da aplicação. Padrão: `Production`. |
+| `API_IMAGE` | Imagem Docker da API (opcional). |
+| `API_BASE_URL` | URL pública da **API**. Usada no webhook do Mercado Pago (`/api/payment/webhook`) e na URL dos arquivos enviados. |
+| `PUBLIC_BASE_URL` | URL pública do **frontend**. Usada nos links dos e-mails e nos redirecionamentos de pagamento (`/payment/success`, `/failure`, `/pending`). |
+| `MSSQL_SA_PASSWORD` | Senha do usuário `sa` do SQL Server. Precisa atender à política de complexidade do SQL Server. |
+| `JWT_KEY` | Chave de assinatura dos tokens JWT. |
+| `JWT_EMAIL_VERIFICATION_KEY` | Chave dos tokens de verificação de e-mail. |
+| `JWT_RESET_PASSWORD_KEY` | Chave dos tokens de redefinição de senha. |
+| `CPF_ENCRYPTION_KEY` | Chave de criptografia do CPF (AES-256-GCM). |
+| `CPF_HMAC_KEY` | Chave do HMAC-SHA256 usado para detectar CPFs duplicados. |
+| `EMAIL_SENDER` | E-mail remetente. |
+| `EMAIL_SMTP_USERNAME` | Usuário do SMTP (o servidor configurado é `smtp.gmail.com:587`). |
+| `EMAIL_SMTP_PASSWORD` | Senha do SMTP. No Gmail, use uma **senha de app**, não a senha da conta. |
+| `AZURE_STORAGE_CONNECTION_STRING` | Connection string do Azure Blob Storage. Só é necessária se `Storage__Provider` for Azure. |
+| `GOOGLE_CLIENT_ID` | Client ID do Google OAuth, para login com Google. |
+| `MERCADOPAGO_ACCESS_TOKEN` | Access token da aplicação no Mercado Pago. |
+| `MERCADOPAGO_WEBHOOK_SECRET` | Segredo para validar a assinatura (`x-signature`) dos webhooks. |
+
+**Gerando chaves seguras**
+
+Use valores longos e aleatórios, diferentes para cada chave:
+
+```bash
+openssl rand -base64 48   # chaves JWT
+openssl rand -base64 32   # chaves de CPF (256 bits)
+```
+
+> Confirme no código o formato esperado por `CPF_ENCRYPTION_KEY` (tamanho e codificação) antes de gerar a sua.
+>
+> **Atenção:** se você trocar `CPF_ENCRYPTION_KEY` ou `CPF_HMAC_KEY` depois que já existirem CPFs salvos, os dados antigos deixam de ser legíveis e a detecção de duplicidade quebra. Guarde essas chaves com cuidado.
+
+**Configurações fixas no compose**
+
+Estas já vêm definidas no `docker-compose.api.yml` e podem ser editadas lá, se necessário:
+
+| Configuração | Valor padrão |
+|---|---|
+| `Jwt__Expiration` | `3` |
+| `Jwt__ExpirationEmailVerification` | `30` |
+| `Jwt__ExpirationResetPassword` | `15` |
+| `Jwt__Issuer` / `Jwt__Audience` | `api-pi-clubes` |
+| `Storage__Provider` | `Local` |
+| `ReserveCleanup__RetentionMonths` | `6` |
+| `Email__SenderName` | `Clube PI` |
+| `Booking__BookingCutoffMinutes` | `10` |
+| `Booking__CancellationCutoffMinutes` | `10` |
+| `Booking__TimeZoneId` | `America/Sao_Paulo` |
+| `Share__FrontendBaseUrl` | `https://www.clubera.dev` |
+| `Share__ApiPublicBaseUrl` | `https://api.clubera.dev` |
+| `Share__AllowedImageHosts__0` | `api.clubera.dev` |
+
+**Armazenamento de imagens**
+
+Por padrão (`Storage__Provider: "Local"`), os arquivos são gravados em `/app/wwwroot/uploads` dentro do container, mapeado para `/DATA/AppData/clubera-api-uploads` no host. Para usar Azure Blob Storage, preencha `AZURE_STORAGE_CONNECTION_STRING` e altere `Storage__Provider` no compose.
+
+### Integração entre frontend e API
+
+- A API precisa liberar **CORS com credenciais** para a origem do frontend (`http://localhost:4200` em desenvolvimento), pois a autenticação usa cookies.
+- A variável `PUBLIC_BASE_URL` da API deve apontar para a URL pública do frontend, porque é usada nos links dos e-mails (verificação e redefinição de senha) e nos redirecionamentos do pagamento (`/payment/success`, `/payment/failure`, `/payment/pending`).
+- O `googleClientId` do frontend deve ser o mesmo `GOOGLE_CLIENT_ID` da API. No Google Cloud Console, adicione a URL do frontend às **origens JavaScript autorizadas** do Client ID.
+
+---
+
+## Boas práticas de segurança
+
+- Nunca versione o `.env` nem exponha as chaves em logs ou issues.
+- Use senhas e chaves diferentes por ambiente (desenvolvimento, homologação, produção).
+- Em produção, mantenha `ASPNETCORE_ENVIRONMENT=Production` e restrinja `AllowedHosts` ao seu domínio.
+- Faça backup periódico do banco e da pasta de uploads.
+- O frontend não guarda tokens em `localStorage`: a sessão fica em cookies enviados pela API.
+- O `localStorage` é usado apenas para a preferência de tema, e o `sessionStorage` para lembrar que o aviso de perfil incompleto foi dispensado.
+- Valores sensíveis (chaves, segredos) pertencem somente à API; o `googleClientId` é público por natureza.
+- Mantenha o `apiUrl` de produção sempre em **HTTPS**.
+
+---
+
+## Referências
+
+- [Documentação do Angular](https://angular.dev/docs)
+- [Tailwind CSS](https://tailwindcss.com/docs)
+- [daisyUI](https://daisyui.com/docs/)
+- [Documentação do ASP.NET Core](https://learn.microsoft.com/pt-br/aspnet/core/)
+- [Documentação técnica do SQL Server](https://learn.microsoft.com/pt-br/sql/sql-server/)
+- [SignalR (cliente JavaScript)](https://learn.microsoft.com/pt-br/aspnet/core/signalr/javascript-client)
+- [ViaCEP](https://viacep.com.br/)
+- [GitHub Copilot](https://docs.github.com/en/copilot)
+- [Claude](https://www.anthropic.com/claude)
+
+---
+
+## Licença
+
+Projeto acadêmico desenvolvido na Fatec Taquaritinga.
+
+[Apache 2.0 License](LICENSE), Version 2.0, January 2004, [www.apache.org/licenses/](http://www.apache.org/licenses/).
