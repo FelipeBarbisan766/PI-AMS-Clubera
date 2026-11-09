@@ -1,0 +1,31 @@
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface MeEnvelope {
+  isAuthenticated: boolean;
+  user: MeResponse | null;
+}
+
+export interface MeResponse {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  phoneNumber?: string;
+  hasPassword: boolean;
+  avatarUrl?: string;
+}
+
+export interface AdminMeResponse {
+  id: string;
+}
+
+export interface PlayerMeResponse {
+  id: string;
+}
+export interface ChangeEmailDTO {
+  password: string;
+  newEmail: string;
+}

@@ -1,0 +1,139 @@
+﻿using API_PI_Clubes.Application.DTOs;
+using API_PI_Clubes.Application.Email;
+using API_PI_Clubes.Application.Exceptions;
+using API_PI_Clubes.Application.Interfaces.IMappers;
+using API_PI_Clubes.Application.Interfaces.IRepositories;
+using API_PI_Clubes.Application.Interfaces.IServices;
+using API_PI_Clubes.Application.Storage;
+using API_PI_Clubes.Infrastructure.Security.Interfaces;
+using API_PI_Clubes.Model;
+using API_PI_Clubes.Model.Enums;
+
+namespace API_PI_Clubes.Application.Services
+{
+    public class UserService : IUserService
+    {
+        private readonly IUserRepository _repository;
+        private readonly IPasswordHasher _passwordHasher;
+        private readonly IUserMapper _mapper;
+        private readonly IImageProcessingService _imageProcessor;
+        private readonly IStorageService _storageService;
+        private readonly IHttpClientFactory  _httpClientFactory;
+
+        public UserService(
+            IUserRepository userRepository, 
+            IPasswordHasher passwordHasher, 
+            IUserMapper mapper,
+            IImageProcessingService imageProcessor,
+            IStorageService storageService,
+            IHttpClientFactory  httpClientFactory
+            )
+        {
+            _repository = userRepository;
+            _passwordHasher = passwordHasher;
+            _mapper = mapper;
+            _imageProcessor = imageProcessor;
+            _storageService = storageService;
+            _httpClientFactory = httpClientFactory;
+        }
+
+        public async Task<ResponseUserDTO> GetById(Guid id, CancellationToken cancellationToken)
+        {
+            var user = await _repository.GetByIdAsync(id, cancellationToken);
+
+            if (user == null)
+                throw new NotFoundException("Usuário", id); 
+
+            return _mapper.ToDTO(user);
+        }
+
+
+        public async Task<ResponseUserDTO> Update(Guid id, UpdateUserDTO dto, CancellationToken cancellationToken)
+        {
+            var user = await _repository.GetByIdAsync(id, cancellationToken);
+
+            if (user == null)
+                throw new NotFoundException("Usuário", id);
+
+            if(dto.Name != null)
+                user.Name = dto.Name;
+            if (dto.PhoneNumber != null)
+                user.PhoneNumber = dto.PhoneNumber;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            _repository.Update(user);
+            await _repository.SaveChangesAsync(cancellationToken);
+
+            return _mapper.ToDTO(user);
+        }
+
+        public async Task UpdateRole(Guid id, RoleEnum role, CancellationToken cancellationToken)
+        {
+            var user = await _repository.GetByIdAsync(id, cancellationToken);
+
+            if (user == null)
+                throw new NotFoundException("Usuário", id);
+
+            user.Role = role;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            _repository.Update(user);
+            await _repository.SaveChangesAsync(cancellationToken);
+        }
+        
+        public async Task UpdateAvatar(Guid id, UpdateAvatarDTO dto, CancellationToken cancellationToken)
+        {
+            var user = await _repository.GetByIdAsync(id, cancellationToken);
+            if (user == null)
+                throw new NotFoundException("Usuário", id);
+
+            if (dto.AvatarImage != null)
+            {
+                var oldAvatarUrl = user.AvatarUrl;
+
+                user.AvatarUrl = await ProcessAndUploadImage(dto.AvatarImage, cancellationToken);
+                user.UpdatedAt = DateTime.UtcNow;
+
+                _repository.Update(user);
+                await _repository.SaveChangesAsync(cancellationToken);
+
+                if (!string.IsNullOrEmpty(oldAvatarUrl))
+                {
+                    var oldFileName = Path.GetFileName(new Uri(oldAvatarUrl).LocalPath);
+                    await _storageService.DeleteFileAsync(oldFileName, cancellationToken);
+                }
+            }
+        }
+
+        public async Task Delete(Guid id, CancellationToken cancellationToken)
+        {
+            var user = await _repository.GetByIdAsync(id, cancellationToken);
+
+            if (user == null)
+                throw new NotFoundException("Usuário", id);
+
+            user.IsActive = false;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            _repository.Update(user);
+            await _repository.SaveChangesAsync(cancellationToken);
+        }
+        
+        private async Task<string> ProcessAndUploadImage(IFormFile file, CancellationToken cancellationToken)
+        {
+            using var inputStream = file.OpenReadStream();
+            return await ProcessAndUploadImageStream(inputStream, cancellationToken);
+        }
+        private async Task<string> ProcessAndUploadImageStream(Stream inputStream, CancellationToken cancellationToken)
+        {
+            using var variant = await _imageProcessor.ProcessAsync(inputStream, ImageVariantType.Avatar);
+            return await _storageService.UploadFileAsync(variant.Stream, variant.FileName, cancellationToken);
+        }
+        public async Task<string> ProcessAvatarFromUrlAsync(string imageUrl, CancellationToken cancellationToken)
+        {
+            using var httpClient = _httpClientFactory.CreateClient();
+            await using var inputStream = await httpClient.GetStreamAsync(imageUrl);
+            return await ProcessAndUploadImageStream(inputStream, cancellationToken);
+        }
+    }
+}

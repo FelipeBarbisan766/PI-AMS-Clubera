@@ -1,0 +1,122 @@
+﻿using API_PI_Clubes.Application.Auth;
+using API_PI_Clubes.Application.Common;
+using API_PI_Clubes.Application.Email;
+using API_PI_Clubes.Application.Interfaces.IMappers;
+using API_PI_Clubes.Application.Interfaces.IRepositories;
+using API_PI_Clubes.Application.Interfaces.IServices;
+using API_PI_Clubes.Application.Mappers;
+using API_PI_Clubes.Application.Services;
+using API_PI_Clubes.Application.Storage;
+using API_PI_Clubes.Infrastructure.Repositories;
+using API_PI_Clubes.Infrastructure.Security;
+using API_PI_Clubes.Infrastructure.Security.Interfaces;
+using API_PI_Clubes.Infrastructure.Services;
+using API_PI_Clubes.Infrastructure.Settings;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace API_PI_Clubes.Application.DependencyInjection
+{
+    public static class DependencyInjection
+    {
+        public static IServiceCollection AddApplication(this IServiceCollection services,IConfiguration configuration)
+        {
+            services.Configure<StorageSettings>(configuration.GetSection("Storage"));
+            
+            services.AddScoped<IClubService, ClubService>();
+            services.AddScoped<IClubRepository, ClubRepository>();
+            services.AddScoped<IClubMapper, ClubMapper>();
+
+            services.AddScoped<IClubReviewService, ClubReviewService>();
+            services.AddScoped<IClubReviewRepository, ClubReviewRepository>();
+            
+            services.AddScoped<ICourtService, CourtService>();
+            services.AddScoped<ICourtRepository, CourtRepository>();
+            services.AddScoped<ICourtMapper, CourtMapper>();
+            
+            services.AddScoped<ISportRepository, SportRepository>();
+            services.AddScoped<ISportService, SportService>();
+            
+            services.AddScoped<IFlagRepository, FlagRepository>();
+            services.AddScoped<IFlagService, FlagService>();
+            
+            services.AddScoped<IReserveService, ReserveService>();
+            services.AddScoped<IReserveRepository, ReserveRepository>();
+            services.AddScoped<IReserveMapper, ReserveMapper>();
+            
+            services.AddScoped<IReserveCleanupService, ReserveCleanupService>();
+            services.AddHostedService<ReserveCleanupHostedService>();
+            
+            services.AddScoped<IScheduleService, ScheduleService>();
+            services.AddScoped<IScheduleRepository, ScheduleRepository>();
+            services.AddScoped<IScheduleMapper, ScheduleMapper>();
+            
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IUserMapper, UserMapper>();
+            
+            services.AddScoped<IPlayerService, PlayerService>();
+            services.AddScoped<IPlayerRepository, PlayerRepository>();
+            services.AddScoped<IPlayerMapper, PlayerMapper>();
+            
+            services.AddScoped<IAdminService, AdminService>();
+            services.AddScoped<IAdminRepository, AdminRepository>();
+            services.AddScoped<IAdminMapper, AdminMapper>();
+
+            services.AddScoped<IImageService, ImageService>();
+            services.AddScoped<IImageRepository, ImageRepository>();
+            
+            services.AddScoped<IPaymentService, PaymentService>();
+            services.AddScoped<IPaymentRepository, PaymentRepository>();
+            services.AddScoped<IMercadoPagoOrdersClient, MercadoPagoOrdersClient>();
+            
+            services.AddScoped<ISubscriptionService, SubscriptionService>();
+            services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
+            
+            services.AddScoped<IPlanService, PlanService>();
+            services.AddScoped<IPlanRepository, PlanRepository>();
+            services.AddScoped<IPlanLimitService, PlanLimitService>();
+            services.AddScoped<IPlanPricingRepository, PlanPricingRepository>();
+            services.AddScoped<IPlanPricingCalculator, PlanPricingCalculator>();
+            
+            services.AddScoped<IAuthService, AuthService>();
+
+            services.AddScoped<EmailBodyService>();
+            services.AddScoped<IEmailService, EmailService>();
+
+            services.AddScoped<IReserveNotificationService, ReserveNotificationService>();;
+            services.AddScoped<ICookieAuthService, CookieAuthService>();
+            
+            var provider = configuration.GetSection("Storage")["Provider"];
+
+            // if (string.Equals(provider, "Azure", StringComparison.OrdinalIgnoreCase))
+            //     services.AddScoped<IStorageService, AzureStorageService>();
+            // else
+                services.AddScoped<IStorageService, LocalStorageService>();
+            
+            services.AddScoped<IImageProcessingService, ImageProcessingService>();
+            
+            services.AddScoped<ITokenService, TokenService>();
+
+            services.AddScoped<IPasswordHasher, PasswordHasher>();
+
+            services.AddScoped<ICpfEncryptionService, AesCpfEncryptionService>();
+            
+            services.Configure<BookingOptions>(configuration.GetSection(BookingOptions.SectionName));
+            services.AddSingleton(TimeProvider.System);
+            services.AddSingleton<IBookingPolicy, BookingPolicy>();
+            services.AddScoped<ICancellationPolicy, CancellationPolicy>();
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped<IPlanDowngradeService, PlanDowngradeService>();
+            
+            services.AddScoped<IShareService, ShareService>();
+            services.AddScoped<IShareImageService, ShareImageService>();
+            services.AddMemoryCache();
+            services.AddSingleton<IShareImageRenderer, ShareImageRenderer>();
+            services.AddSingleton<ICoverImageLoader, CoverImageLoader>();
+            
+            return services;
+        }
+    }
+}

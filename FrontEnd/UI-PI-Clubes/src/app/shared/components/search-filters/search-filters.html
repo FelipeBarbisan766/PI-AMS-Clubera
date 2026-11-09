@@ -1,0 +1,105 @@
+<div class="sticky top-24 rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
+  <h2 class="font-bold text-base-content text-base mb-4 border-b border-base-200 pb-2">
+    Filtrar por:
+  </h2>
+
+  <div class="space-y-6">
+    <!-- Busca por nome -->
+    <div>
+      <label for="search-input" class="text-sm font-bold text-base-content block mb-2">
+        Nome
+      </label>
+      <div class="relative">
+       
+        <input
+          id="search-input"
+          type="search"
+          [placeholder]="searchPlaceholder()"
+          class="input input-bordered input-sm w-full rounded-md"
+          [value]="searchTerm()"
+          (input)="onSearchInput($event)"
+          TextDirective
+        />
+      </div>
+    </div>
+
+    <!-- Cidade -->
+    <div>
+      <label for="city-input" class="text-sm font-bold text-base-content block mb-2">
+        Cidade
+      </label>
+
+     @if (suggestedCity(); as city) {
+  <div
+    role="status"
+    class="flex items-center gap-2 mb-2 rounded-md border border-primary/30 bg-primary/10 px-2 py-1.5 text-xs"
+  >
+    <span class="min-w-0 flex-1 truncate">
+      Ver clubes em <strong>{{ city }}</strong>?
+    </span>
+    <button
+      type="button"
+      class="btn btn-xs btn-primary text-white"
+      (click)="acceptSuggestedCity.emit()"
+    >
+      Ver
+    </button>
+    <button
+      type="button"
+      class="btn btn-xs btn-ghost btn-square"
+      aria-label="Dispensar sugestão"
+      (click)="dismissSuggestedCity.emit()"
+    >
+      ✕
+    </button>
+  </div>
+}
+      <input
+        id="city-input"
+        type="text"
+        placeholder="Ex: São Paulo"
+        class="input input-bordered input-sm w-full rounded-md"
+        [value]="cityFilter()"
+        (input)="onCityInput($event)"
+        TextDirective
+      />
+    </div>
+
+    <!-- Modalidades (Sport) -->
+    <div>
+      <span class="text-sm font-bold text-base-content block mb-3" id="sports-filter-label">
+        Esportes
+      </span>
+
+      @if (selectedSportIds().length > 0) {
+        <button
+          class="btn btn-xs btn-ghost text-error mb-2 px-0"
+          (click)="clearSports.emit()"
+          type="button"
+        >
+          Limpar seleção ({{ selectedSportIds().length }})
+        </button>
+      }
+
+      <div
+        class="space-y-2.5 max-h-60 overflow-y-auto pr-2"
+        role="group"
+        aria-labelledby="sports-filter-label"
+      >
+        @for (sport of sportService.sports(); track sport.id) {
+          <label
+            class="flex items-center gap-3 cursor-pointer text-sm text-base-content/80 hover:text-base-content"
+          >
+            <input
+              type="checkbox"
+              class="checkbox checkbox-primary checkbox-sm rounded"
+              [checked]="isSportSelected(sport.id)"
+              (change)="toggleSport.emit(sport.id)"
+            />
+            {{ sport.name }}
+          </label>
+        }
+      </div>
+    </div>
+  </div>
+</div>

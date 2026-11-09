@@ -1,0 +1,211 @@
+import {
+  Component,
+  ChangeDetectionStrategy,
+  inject,
+  signal,
+  AfterViewInit,
+  viewChild,
+  ElementRef,
+  DestroyRef,
+} from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import {
+  AbstractControl,
+  NonNullableFormBuilder,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validators,
+} from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
+import { catchError, EMPTY, finalize, switchMap, take, tap } from 'rxjs';
+import { ServiceSignUp } from '../../services/service-sign-up';
+import { ToastAlert } from '../../../../shared/components/toast-alert/toast-alert';
+import { GoogleAuthService } from '../../services/service-google';
+import { AuthService } from '../../../../core/services/auth-service';
+import { OnlyLetters } from '../../../../shared/directives/only-letters';
+import { EmailDirective } from '../../../../shared/directives/email-directive';
+// TODO: ajuste o caminho conforme a localização do seu componente de termos
+import { Termspgae } from '../../../../shared/components/termspgae/termspgae';
+
+function passwordsMatchValidator(control: AbstractControl): ValidationErrors | null {
+  const password = control.get('password')?.value ?? '';
+  const confirmPassword = control.get('confirmPassword')?.value ?? '';
+  return password === confirmPassword ? null : { passwordMismatch: true };
+}
+
+@Component({
+  selector: 'app-sign-up',
+  imports: [ReactiveFormsModule, RouterLink, ToastAlert, OnlyLetters, EmailDirective, Termspgae],
+  templateUrl: './sign-up.html',
+  styleUrl: './sign-up.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class SignUp implements AfterViewInit {
+  private readonly fb = inject(NonNullableFormBuilder);
+  private readonly signUpService = inject(ServiceSignUp);
+  private readonly router = inject(Router);
+  private readonly authService = inject(AuthService);
+  private readonly googleAuth = inject(GoogleAuthService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  readonly googleBtnRef = viewChild<ElementRef<HTMLElement>>('googleBtn');
+  readonly termsDialog = viewChild<ElementRef<HTMLDialogElement>>('termsDialog');
+
+  readonly isSubmitting = signal(false);
+  readonly errorMessage = signal<string | null>(null);
+  readonly showPassword = signal(false);
+  readonly showConfirmPassword = signal(false);
+
+  readonly form = this.fb.group(
+    {
+      name: [
+        '',
+        [
+          Validators.required,
+          Validators.minLength(3),
+          Validators.maxLength(100),
+          Validators.pattern(/^[A-Za-zÀ-ÖØ-öø-ÿ\s\-'().]+$/)
+        ],
+      ],
+      email: ['', [Validators.required, Validators.email]],
+      password: [
+        '',
+        [
+          Validators.required,
+          Validators.pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/),
+        ],
+      ],
+      confirmPassword: ['', [Validators.required]],
+      acceptedTerms: [false, [Validators.requiredTrue]],
+    },
+    { validators: passwordsMatchValidator },
+  );
+
+  readonly termsAccepted = toSignal(this.form.controls.acceptedTerms.valueChanges, {
+    initialValue: this.form.controls.acceptedTerms.value,
+  });
+
+  toggleShowPassword(): void {
+    this.showPassword.update((v) => !v);
+  }
+
+  toggleShowConfirmPassword(): void {
+    this.showConfirmPassword.update((v) => !v);
+  }
+
+  ngAfterViewInit(): void {
+    const btnEl = this.googleBtnRef()?.nativeElement;
+    if (!btnEl) return;
+
+    this.googleAuth.initialize((idToken) => this.handleGoogleSignUp(idToken));
+    this.googleAuth.renderButton(btnEl);
+
+    this.destroyRef.onDestroy(() => this.googleAuth.cancel());
+  }
+
+  onTermsCheckboxClick(event: Event): void {
+    // Impede o checkbox de alternar sozinho: o aceite só acontece pelo modal.
+    event.preventDefault();
+    this.openTerms();
+  }
+
+  openTerms(): void {
+    this.termsDialog()?.nativeElement.showModal();
+  }
+
+  acceptTerms(): void {
+    const control = this.form.controls.acceptedTerms;
+    control.setValue(true);
+    control.markAsTouched();
+    this.termsDialog()?.nativeElement.close();
+  }
+
+  cancelTerms(): void {
+    const control = this.form.controls.acceptedTerms;
+    control.setValue(false);
+    control.markAsTouched();
+    this.termsDialog()?.nativeElement.close();
+  }
+
+  private handleGoogleSignUp(idToken: string): void {
+    if (!this.form.controls.acceptedTerms.value) {
+      this.form.controls.acceptedTerms.markAsTouched();
+      this.errorMessage.set('Para continuar, aceite os Termos de Uso e a Política de Privacidade.');
+      return;
+    }
+
+    this.isSubmitting.set(true);
+    this.errorMessage.set(null);
+    console.log('Google ID Token:', idToken);
+    this.signUpService
+      .signUpWithGoogle({ idToken })
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => this.isSubmitting.set(false)),
+      )
+      .subscribe({
+        next: () =>
+          this.authService
+            .googleLogin(idToken)
+            .pipe(
+              take(1),
+              switchMap(() => this.authService.refreshMe()),
+              tap(() => void this.router.navigateByUrl(this.authService.getPostLoginRoute())),
+              catchError((error: unknown) => {
+                this.errorMessage.set(
+                  error instanceof Error ? error.message : 'Erro ao entrar com Google.',
+                );
+                return EMPTY;
+              }),
+              tap(() => this.isSubmitting.set(false)),
+            )
+            .subscribe({
+              complete: () => this.isSubmitting.set(false),
+            }),
+        error: (error: unknown) => {
+          console.log('Google Sign-Up Error:', error);
+          this.errorMessage.set(
+            'Ocorreu um erro ao criar sua conta com o Google. Tente novamente.',
+          );
+        },
+      });
+  }
+
+  onSubmit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.isSubmitting.set(true);
+    this.errorMessage.set(null);
+
+    const { confirmPassword: _, acceptedTerms: __, ...payload } = this.form.getRawValue();
+
+    this.signUpService
+      .signUp(payload)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => this.isSubmitting.set(false)),
+      )
+      .subscribe({
+        next: () => void this.router.navigate(['/verify-mail']),
+        error: (error: unknown) => this.errorMessage.set(this.extractErrorMessage(error)),
+      });
+  }
+
+  private extractErrorMessage(error: unknown): string {
+    const fallback = 'Ocorreu um erro ao criar sua conta. Verifique os dados e tente novamente.';
+
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'error' in error &&
+      typeof (error as { error?: { message?: string } }).error?.message === 'string'
+    ) {
+      return (error as { error: { message: string } }).error.message || fallback;
+    }
+
+    return fallback;
+  }
+}

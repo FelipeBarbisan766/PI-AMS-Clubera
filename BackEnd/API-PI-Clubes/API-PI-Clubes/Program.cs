@@ -1,0 +1,213 @@
+using API_PI_Clubes.Application;
+using API_PI_Clubes.Application.DependencyInjection;
+using API_PI_Clubes.Application.Email;
+using API_PI_Clubes.Infrastructure.Data;
+using API_PI_Clubes.Infrastructure.Security;
+using API_PI_Clubes.Infrastructure.Settings;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Azure;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using API_PI_Clubes.Api.Filters;
+using API_PI_Clubes.Application.Auth;
+using API_PI_Clubes.Application.Interfaces.IServices;
+using API_PI_Clubes.Application.Services;
+using API_PI_Clubes.Application.Validators;
+using API_PI_Clubes.Hubs;
+using API_PI_Clubes.Infrastructure.Jobs;
+using API_PI_Clubes.Infrastructure.Middlewares;
+using API_PI_Clubes.Infrastructure.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.FileProviders;
+using StackExchange.Redis;
+using FluentValidation;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// --- 1. Serviços de Infraestrutura e Base ---
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddControllers(options => { options.Filters.Add<ValidationFilter>(); })
+    .AddJsonOptions(options => { options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()); });
+builder.Services.AddValidatorsFromAssemblyContaining<CreateClubDTOValidator>();
+// --- 2. Configurações de Storage (Azure Blob Storage) ---
+// var storageConnectionString = builder.Configuration.GetSection("AzureStorage:ConnectionString").Value
+//                               ?? throw new InvalidOperationException("Azure Storage connection string not found.");
+
+// builder.Services.AddAzureClients(clientBuilder => { clientBuilder.AddBlobServiceClient(storageConnectionString); });
+
+// --- 3. Injeção de Dependência da Camada Application ---
+builder.Services.AddApplication(builder.Configuration);
+builder.Services.AddTransient<TokenService>();
+
+// Configurações de E-mail
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+builder.Services.AddScoped<IEmailService, EmailService>();
+
+
+// --- 4. Configurações de Segurança (JWT & Cookies) ---
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
+                  ?? throw new InvalidOperationException("Jwt settings not configured.");
+
+builder.Services.AddOptions<ShareSettings>()
+    .Bind(builder.Configuration.GetSection(ShareSettings.SectionName))
+    .Validate(s => Uri.TryCreate(s.FrontendBaseUrl, UriKind.Absolute, out _)
+                   && Uri.TryCreate(s.ApiPublicBaseUrl, UriKind.Absolute, out _),
+        "Share:FrontendBaseUrl e Share:ApiPublicBaseUrl precisam ser URLs absolutas.")
+    .ValidateOnStart();
+
+builder.Services.AddHttpClient(CoverImageLoader.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(4))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("share-image", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
+
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "clubera_auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+
+        options.Cookie.SameSite = SameSiteMode.Lax;
+
+        options.ExpireTimeSpan = TimeSpan.FromHours(jwtSettings.Expiration);
+        options.SlidingExpiration = true;
+
+        options.Events = new CookieAuthenticationEvents
+        {
+            OnRedirectToLogin = context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            },
+            OnRedirectToAccessDenied = context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options => { options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()); });
+builder.Services.AddAuthorization();
+builder.Services.AddHttpClient();
+var mpAccessToken = builder.Configuration["MercadoPago:AccessToken"]
+                    ?? throw new InvalidOperationException("MercadoPago:AccessToken não configurado.");
+
+builder.Services.AddHttpClient<IMercadoPagoOrdersClient, MercadoPagoOrdersClient>(c =>
+{
+    c.BaseAddress = new Uri("https://api.mercadopago.com/");
+    c.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", mpAccessToken);
+});
+
+// --- 5. Configuração de CORS ---
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CluberaPolicy", policy =>
+    {
+        policy.WithOrigins("https://www.clubera.dev", "https://clubera.dev", "https://api.clubera.dev",
+                "http://localhost:4200")
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlServerOptionsAction: sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null);
+        }));
+
+
+builder.Services.AddHostedService<SubscriptionExpiryJob>();
+
+var app = builder.Build();
+
+app.UseMiddleware<ExceptionMiddleware>();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// Aplicação automática de Migrations
+// using (var scope = app.Services.CreateScope())
+// {
+//     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+//     const int maxRetries = 10;
+//     const int delaySeconds = 5;
+
+//     for (int attempt = 1; attempt <= maxRetries; attempt++)
+//     {
+//         try
+//         {
+//             db.Database.Migrate();
+//             break; 
+//         }
+//         catch (Exception ex)
+//         {
+//             if (attempt == maxRetries)
+//             {
+//                 throw;
+//             }
+
+//             Console.WriteLine(
+//                 $"[Startup] Falha ao migrar o banco (tentativa {attempt}/{maxRetries}): {ex.Message}. " +
+//                 $"Tentando de novo em {delaySeconds}s...");
+
+//             Thread.Sleep(TimeSpan.FromSeconds(delaySeconds));
+//         }
+//     }
+// }
+var wwwrootPath = app.Environment.WebRootPath
+                  ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(wwwrootPath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(wwwrootPath),
+    RequestPath = ""
+});
+
+
+app.UseRouting();
+app.UseRateLimiter();
+app.UseCors("CluberaPolicy");
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+app.MapHub<CourtAvailabilityHub>("api/hubs/court-availability");
+
+app.Run();

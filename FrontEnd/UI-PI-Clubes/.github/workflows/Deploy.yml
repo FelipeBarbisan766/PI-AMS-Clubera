@@ -1,0 +1,27 @@
+name: Deploy Front
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: self-hosted  
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build Angular
+        run: npx ng build --configuration production
+
+      - name: Restart nginx to pick up new build
+        run: docker compose -f docker-compose.front.yml up -d --force-recreate

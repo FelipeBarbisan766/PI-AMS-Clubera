@@ -1,0 +1,331 @@
+@if (errorMessage(); as msg) {
+  <app-toast-alert [message]="msg" type="error" (dismiss)="errorMessage.set(null)" />
+}
+
+<div class="w-full min-h-[calc(100vh-var(--nav-h))] pattern-background flex items-center justify-center px-4 py-12">
+  <div
+    class="card w-full max-w-lg bg-base-100 shadow-xl rounded-3xl overflow-hidden border border-base-300"
+  >
+    <div class="card-body p-6 md:p-8">
+      <div class="text-center mb-6">
+        <h1 class="text-2xl md:text-3xl font-bold text-base-content mb-2">Crie sua conta</h1>
+        <p class="text-base-content/60 text-sm">Preencha seus dados para reservar as melhores quadras.</p>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="flex flex-col gap-4">
+        <div class="form-group">
+          <label for="name" class="text-sm font-medium text-base-content block pb-2">
+            Nome completo
+          </label>
+
+          <div
+            class="input w-full"
+            [class.input-error]="form.controls.name.invalid && form.controls.name.touched"
+          >
+            <input
+              id="name"
+              type="text"
+              formControlName="name"
+              class="grow text-sm"
+              [attr.aria-invalid]="form.controls.name.invalid && form.controls.name.touched"
+              [attr.aria-describedby]="
+                form.controls.name.invalid && form.controls.name.touched ? 'name-error' : null
+              "
+              placeholder="Ex: Vitor Fanelli"
+              OnlyLetters
+            />
+          </div>
+
+          <div class="h-5 mt-1 px-3">
+            @if (form.controls.name.invalid && form.controls.name.touched) {
+              <p id="name-error" class="text-error text-xs" role="alert">
+                @if (form.controls.name.hasError('required')) {
+                  O nome é obrigatório.
+                } @else if (form.controls.name.hasError('minlength')) {
+                  O nome deve ter pelo menos 3 caracteres.
+                  } @else if (form.controls.name.hasError('maxlength')) {
+                  O nome deve ter no máximo 100 caracteres.
+                } @else if (form.controls.name.hasError('pattern')) {
+                  O nome deve conter apenas letras. Não é permitido o uso de números ou caracteres especiais.
+                }
+              </p>
+            }
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="email" class="text-sm font-medium text-base-content block pb-2">
+            E-mail
+          </label>
+          <div
+            class="input w-full"
+            [class.input-error]="form.controls.email.invalid && form.controls.email.touched"
+          >
+            <input
+              id="email"
+              type="email"
+              formControlName="email"
+              class="grow text-sm"
+              [attr.aria-invalid]="form.controls.email.invalid && form.controls.email.touched"
+              [attr.aria-describedby]="
+                form.controls.email.invalid && form.controls.email.touched ? 'email-error' : null
+              "
+              placeholder="seu@email.com"
+              EmailDirective
+            />
+          </div>
+          <div class="h-5 mt-1 px-3">
+            @if (form.controls.email.invalid && form.controls.email.touched) {
+              <p id="email-error" class="text-error text-xs" role="alert">
+                @if (form.controls.email.hasError('required')) {
+                  O e-mail é obrigatório.
+                } @else if (form.controls.email.hasError('email')) {
+                  Informe um e-mail válido.
+                }
+              </p>
+            }
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password" class="text-sm font-medium text-base-content block pb-2">
+            Senha
+          </label>
+          <div
+            class="input w-full"
+            [class.input-error]="form.controls.password.invalid && form.controls.password.touched"
+          >
+            <input
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              class="grow text-sm"
+              [attr.aria-invalid]="form.controls.password.invalid && form.controls.password.touched"
+              [attr.aria-describedby]="
+                form.controls.password.invalid && form.controls.password.touched
+                  ? 'password-error'
+                  : null
+              "
+              placeholder="*********"
+            />
+
+            <button
+              type="button"
+              class="shrink-0 text-base-content/50 hover:text-base-content transition-colors"
+              (click)="toggleShowPassword()"
+              [attr.aria-label]="showPassword() ? 'Ocultar senha' : 'Mostrar senha'"
+              [attr.aria-pressed]="showPassword()"
+            >
+              @if (showPassword()) {
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                </svg>
+              } @else {
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+              }
+            </button>
+          </div>
+          <div class="h-5 mt-1 px-3 mb-5">
+            @if (form.controls.password.invalid && form.controls.password.touched) {
+              <p id="password-error" class="text-error text-xs" role="alert">
+                @if (form.controls.password.hasError('required')) {
+                  A senha é obrigatória.
+                } @else if (form.controls.password.hasError('pattern')) {
+                  A senha deve ter no mínimo 8 caracteres, incluindo letra maiúscula, letra
+                  minúscula, número e caractere especial.
+                }
+              </p>
+            }
+            @else {
+              <p id="password-info" class="text-gray-400 text-xs">
+                A senha deve ter no mínimo 8 caracteres, incluindo letra maiúscula, letra
+                minúscula, número e caractere especial.
+              </p>
+            }
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword" class="text-sm font-medium text-base-content block pb-2">
+            Confirmar senha
+          </label>
+          <div
+            class="input w-full"
+            [class.input-error]="
+              (form.controls.confirmPassword.invalid && form.controls.confirmPassword.touched) ||
+              (form.hasError('passwordMismatch') && form.controls.confirmPassword.touched)
+            "
+          >
+            <input
+              id="confirmPassword"
+              [type]="showConfirmPassword() ? 'text' : 'password'"
+              formControlName="confirmPassword"
+              class="grow text-sm"
+              [attr.aria-invalid]="
+                (form.controls.confirmPassword.invalid && form.controls.confirmPassword.touched) ||
+                (form.hasError('passwordMismatch') && form.controls.confirmPassword.touched)
+              "
+              [attr.aria-describedby]="
+                (form.controls.confirmPassword.invalid && form.controls.confirmPassword.touched) ||
+                (form.hasError('passwordMismatch') && form.controls.confirmPassword.touched)
+                  ? 'confirmPassword-error'
+                  : null
+              "
+              placeholder="*********"
+            />
+
+            <button
+              type="button"
+              class="shrink-0 text-base-content/50 hover:text-base-content transition-colors"
+              (click)="toggleShowConfirmPassword()"
+              [attr.aria-label]="showConfirmPassword() ? 'Ocultar confirmação de senha' : 'Mostrar confirmação de senha'"
+              [attr.aria-pressed]="showConfirmPassword()"
+            >
+              @if (showConfirmPassword()) {
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                </svg>
+              } @else {
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+              }
+            </button>
+          </div>
+          <div class="h-5 mt-1 px-3">
+            @if (form.controls.confirmPassword.invalid && form.controls.confirmPassword.touched) {
+              <p id="confirmPassword-error" class="text-error text-xs" role="alert">
+                @if (form.controls.confirmPassword.hasError('required')) {
+                  A confirmação de senha é obrigatória.
+                } @else if (form.controls.confirmPassword.hasError('minlength')) {
+                  A confirmação deve ter no mínimo 6 caracteres.
+                }
+              </p>
+            } @else if (
+              form.hasError('passwordMismatch') && form.controls.confirmPassword.touched
+            ) {
+              <p id="confirmPassword-error" class="text-error text-xs" role="alert">
+                As senhas não coincidem.
+              </p>
+            }
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="flex items-start gap-3">
+            <input
+              id="acceptedTerms"
+              type="checkbox"
+              formControlName="acceptedTerms"
+              class="checkbox checkbox-sm mt-0.5"
+              (click)="onTermsCheckboxClick($event)"
+              [class.checkbox-error]="
+                form.controls.acceptedTerms.invalid && form.controls.acceptedTerms.touched
+              "
+              [attr.aria-invalid]="
+                form.controls.acceptedTerms.invalid && form.controls.acceptedTerms.touched
+              "
+              [attr.aria-describedby]="
+                form.controls.acceptedTerms.invalid && form.controls.acceptedTerms.touched
+                  ? 'acceptedTerms-error'
+                  : null
+              "
+            />
+            <label for="acceptedTerms" class="text-sm text-base-content/80">
+              Li e concordo com os
+              <button type="button" class="link link-primary font-semibold" (click)="openTerms()">
+                Termos de Uso e a Política de Privacidade
+              </button>
+            </label>
+          </div>
+          <div class="h-5 mt-1 px-3">
+            @if (form.controls.acceptedTerms.invalid && form.controls.acceptedTerms.touched) {
+              <p id="acceptedTerms-error" class="text-error text-xs" role="alert">
+                Você precisa aceitar os Termos de Uso e a Política de Privacidade.
+              </p>
+            }
+          </div>
+        </div>
+
+        <div class="mt-2 pt-2">
+          <button
+            type="submit"
+            class="btn btn-primary w-full rounded-lg font-semibold text-white shadow-lg hover:shadow-primary/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            [disabled]="form.invalid || isSubmitting()"
+            [attr.aria-busy]="isSubmitting()"
+          >
+            @if (isSubmitting()) {
+              <span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
+              <span class="sr-only">Carregando...</span>
+            } @else {
+              Cadastrar
+            }
+          </button>
+        </div>
+
+        <div class="flex items-center gap-3" aria-hidden="true">
+          <hr class="flex-1 border-base-300" />
+          <span class="text-base-content/40 text-xs">ou</span>
+          <hr class="flex-1 border-base-300" />
+        </div>
+
+        <div
+          class="flex flex-col items-center gap-1 transition-opacity"
+          [class.opacity-50]="!termsAccepted()"
+          [class.pointer-events-none]="!termsAccepted()"
+          [attr.inert]="termsAccepted() ? null : ''"
+          [attr.aria-disabled]="!termsAccepted()"
+        >
+          <div #googleBtn aria-label="Cadastrar com Google" class="flex justify-center"></div>
+        </div>
+        @if (!termsAccepted()) {
+          <p class="text-center text-base-content/60 text-xs">
+            Aceite os Termos de Uso e a Política de Privacidade para cadastrar com o Google.
+          </p>
+        }
+
+        <div class="text-center pt-1">
+          <p class="text-base-content/60 text-xs md:text-sm">
+            Já tem uma conta?
+            <a
+              routerLink="/login"
+              class="link link-primary no-underline font-semibold hover:underline"
+            >
+              Fazer login
+            </a>
+          </p>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<dialog
+  #termsDialog
+  class="modal"
+  aria-labelledby="terms-modal-title"
+  (cancel)="$event.preventDefault()"
+>
+  <div class="modal-box w-11/12 max-w-4xl p-0 flex flex-col max-h-[90vh]">
+    <div class="px-6 py-4 border-b border-base-300 shrink-0">
+      <h2 id="terms-modal-title" class="text-lg font-bold">Termos de Uso e Privacidade</h2>
+    </div>
+
+    <div class="flex-1 min-h-0 overflow-y-auto px-2 md:px-4">
+      <app-termspgae [embedded]="true" />
+    </div>
+
+    <div class="modal-action m-0 px-6 py-4 border-t border-base-300 shrink-0">
+      <button type="button" class="btn" (click)="cancelTerms()">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="acceptTerms()">Li e aceito</button>
+    </div>
+  </div>
+</dialog>

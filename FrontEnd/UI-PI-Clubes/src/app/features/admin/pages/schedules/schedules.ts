@@ -1,0 +1,332 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+} from '@angular/core';
+import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ServiceSchedule } from '../../services/service-schedule';
+import {
+  DayOfWeek,
+  ResponseBulkScheduleDTO,
+  ResponseScheduleDTO,
+} from '../../models/model-schedule';
+import { NgxMaskDirective } from 'ngx-mask';
+import { Modal } from '../../../../shared/components/modal/modal';
+import { ServiceCourt } from '../../services/service-court';
+
+type FormMode = 'create' | 'edit' | 'bulk' | null;
+
+const TIME_24H_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function normalizeTime(value: string | null | undefined): string {
+  if (!value) return '';
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  if (!match) return value;
+
+  let hours = Number(match[1]);
+  const minutes = match[2];
+  const meridiem = match[3]?.toUpperCase();
+
+  if (meridiem === 'PM' && hours < 12) hours += 12;
+  if (meridiem === 'AM' && hours === 12) hours = 0;
+
+  return `${String(hours).padStart(2, '0')}:${minutes}`;
+}
+
+@Component({
+  selector: 'app-schedule',
+  imports: [ReactiveFormsModule, Modal, NgxMaskDirective, RouterLink],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './schedules.html',
+})
+export class Schedules implements OnInit {
+  private readonly fb = inject(FormBuilder);
+  private readonly route = inject(ActivatedRoute);
+  protected readonly scheduleService = inject(ServiceSchedule);
+  private readonly courtService = inject(ServiceCourt);
+  
+   protected readonly court = this.courtService.selectedCourt;
+
+  // --- Enum options for selects ---
+  protected readonly dayOfWeekOptions = [
+    { label: 'Domingo', value: DayOfWeek.Sunday },
+    { label: 'Segunda-feira', value: DayOfWeek.Monday },
+    { label: 'Terça-feira', value: DayOfWeek.Tuesday },
+    { label: 'Quarta-feira', value: DayOfWeek.Wednesday },
+    { label: 'Quinta-feira', value: DayOfWeek.Thursday },
+    { label: 'Sexta-feira', value: DayOfWeek.Friday },
+    { label: 'Sábado', value: DayOfWeek.Saturday },
+  ];
+
+  // --- Local state ---
+  private courtId = '';
+  protected readonly formMode = signal<FormMode>(null);
+  protected readonly editingId = signal<string | null>(null);
+  protected readonly deleteConfirmId = signal<string | null>(null);
+  protected readonly clubId = signal('');
+
+  protected readonly backLink = computed(() => ['/admin/club', this.clubId(), 'courts']);
+  protected readonly isFormOpen = computed(() => this.formMode() !== null);
+  protected readonly isEditing = computed(() => this.formMode() === 'edit');
+
+  protected readonly selectedDays = signal<DayOfWeek[]>([]);
+  protected readonly bulkResult = signal<ResponseBulkScheduleDTO | null>(null);
+
+  protected readonly weekTabs = [...this.dayOfWeekOptions.slice(1), this.dayOfWeekOptions[0]];
+
+  protected readonly activeDay = signal<DayOfWeek>(DayOfWeek.Monday);
+
+  protected readonly activeDayLabel = computed(() => this.getDayName(this.activeDay()));
+
+  // --- Form ---
+  protected readonly form = this.fb.group({
+    startTime: ['', [Validators.required, Validators.pattern(TIME_24H_PATTERN)]],
+    endTime: ['', [Validators.required, Validators.pattern(TIME_24H_PATTERN)]],
+    price: [null as number | null, [Validators.required, Validators.min(0)]],
+    isBlocked: [false],
+    isReserved: [false],
+    isFixed: [false],
+    dayOfWeek: [null as DayOfWeek | null, Validators.required],
+  });
+
+  private readonly formStatus = toSignal(this.form.statusChanges, {
+    initialValue: this.form.status,
+  });
+
+  protected readonly isSubmitEnabled = computed(() => this.formStatus() === 'VALID');
+
+  ngOnInit(): void {
+    this.courtId = this.route.snapshot.paramMap.get('courtId') ?? '';
+
+    this.clubId.set(
+      this.route.pathFromRoot
+        .map((r) => r.snapshot.paramMap.get('clubId'))
+        .find((id): id is string => !!id) ?? '',
+    );
+
+    this.scheduleService.getByCourtId(this.courtId).subscribe((schedules) => {
+      const first = this.weekTabs.find((d) => schedules.some((s) => s.dayOfWeek === d.value));
+      if (first) this.activeDay.set(first.value);
+    });
+  }
+
+  protected readonly slotsForActiveDay = computed(() =>
+    this.scheduleService
+      .schedules()
+      .filter((s) => s.dayOfWeek === this.activeDay())
+      .sort((a, b) => normalizeTime(a.startTime).localeCompare(normalizeTime(b.startTime))),
+  );
+
+  protected readonly countByDay = computed(() => {
+    const counts: Record<string, number> = {};
+    for (const s of this.scheduleService.schedules()) {
+      counts[s.dayOfWeek] = (counts[s.dayOfWeek] ?? 0) + 1;
+    }
+    return counts;
+  });
+
+  protected readonly courtSummary = computed(() => {
+    const c = this.court();
+    if (!c) return '';
+    const humanize = (v: string) => v.replace(/([a-zà-ÿ])([A-Z])/g, '$1 $2');
+    const type = c.sports.map((s) => s.name).join(', ');
+    return `${humanize(type)} · ${humanize(c.surface)}`;
+  });
+
+  protected readonly bulkForm = this.fb.group({
+    startTime: ['', [Validators.required, Validators.pattern(TIME_24H_PATTERN)]],
+    endTime: ['', [Validators.required, Validators.pattern(TIME_24H_PATTERN)]],
+    slotDurationMinutes: [60, [Validators.required, Validators.min(15)]],
+    price: [null as number | null, [Validators.required, Validators.min(0)]],
+  });
+
+  private readonly bulkFormStatus = toSignal(this.bulkForm.statusChanges, {
+    initialValue: this.bulkForm.status,
+  });
+
+  protected readonly isBulkSubmitEnabled = computed(
+    () => this.bulkFormStatus() === 'VALID' && this.selectedDays().length > 0,
+  );
+  protected openBulkCreate(): void {
+    this.bulkForm.reset({ startTime: '', endTime: '', slotDurationMinutes: 60, price: null });
+    this.selectedDays.set([]);
+    this.bulkResult.set(null);
+    this.formMode.set('bulk');
+  }
+
+  protected toggleDay(day: DayOfWeek): void {
+    this.selectedDays.update((days) =>
+      days.includes(day) ? days.filter((d) => d !== day) : [...days, day],
+    );
+  }
+
+  protected isDaySelected(day: DayOfWeek): boolean {
+    return this.selectedDays().includes(day);
+  }
+
+  protected onBulkSubmit(): void {
+    if (!this.isBulkSubmitEnabled()) {
+      this.bulkForm.markAllAsTouched();
+      return;
+    }
+
+    const { startTime, endTime, slotDurationMinutes, price } = this.bulkForm.getRawValue();
+
+    this.scheduleService
+      .createBulk(this.courtId, {
+        daysOfWeek: this.selectedDays(),
+        startTime: normalizeTime(startTime),
+        endTime: normalizeTime(endTime),
+        slotDurationMinutes: slotDurationMinutes!,
+        price: price!,
+        courtId: this.courtId,
+      })
+      .subscribe({
+        next: (result) => this.bulkResult.set(result),
+        error: (err: unknown) => console.error('Erro ao criar horários em massa', err),
+      });
+  }
+
+  // --- Form actions ---
+  protected selectDay(day: DayOfWeek): void {
+    this.activeDay.set(day);
+    this.deleteConfirmId.set(null);
+  }
+
+  protected durationLabel(schedule: ResponseScheduleDTO): string {
+    const toMinutes = (v: string): number => {
+      const [h, m] = normalizeTime(v).split(':').map(Number);
+      return h * 60 + m;
+    };
+    const diff = toMinutes(schedule.endTime) - toMinutes(schedule.startTime);
+    if (!(diff > 0)) return '';
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    return h && m ? `${h}h${m}` : h ? `${h}h` : `${m} min`;
+  }
+
+  protected openCreate(): void {
+    this.form.reset({
+      startTime: '',
+      endTime: '',
+      price: null,
+      isBlocked: false,
+      isReserved: false,
+      isFixed: false,
+      dayOfWeek: this.activeDay(), // ← era null
+    });
+    this.editingId.set(null);
+    this.formMode.set('create');
+  }
+
+  protected openEdit(schedule: ResponseScheduleDTO): void {
+    this.form.reset({
+      startTime: normalizeTime(schedule.startTime),
+      endTime: normalizeTime(schedule.endTime),
+      price: schedule.price,
+      dayOfWeek: schedule.dayOfWeek,
+    });
+    this.editingId.set(schedule.id);
+    this.formMode.set('edit');
+  }
+
+  protected closeForm(): void {
+    this.formMode.set(null);
+    this.editingId.set(null);
+    this.form.reset();
+    this.bulkForm.reset();
+    this.selectedDays.set([]);
+    this.bulkResult.set(null);
+  }
+
+  protected onSubmit(): void {
+    if (!this.isSubmitEnabled()) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    if (this.formMode() === 'create') {
+      this._submitCreate();
+    } else {
+      this._submitUpdate();
+    }
+  }
+
+  private _submitCreate(): void {
+    const { startTime, endTime, price, dayOfWeek } = this.form.getRawValue();
+
+    this.scheduleService
+      .create({
+        startTime: normalizeTime(startTime),
+        endTime: normalizeTime(endTime),
+        price: price!,
+        dayOfWeek: dayOfWeek!,
+        courtId: this.courtId,
+      })
+      .subscribe({
+        next: () => this.closeForm(),
+        error: (err: unknown) => {
+          console.error('Erro ao criar horário', err);
+        },
+      });
+  }
+
+  private _submitUpdate(): void {
+    const id = this.editingId();
+    if (id === null) return;
+
+    const { startTime, endTime, price, dayOfWeek } = this.form.getRawValue();
+
+    this.scheduleService
+      .update(id, {
+        startTime: normalizeTime(startTime),
+        endTime: normalizeTime(endTime),
+        price: price!,
+        dayOfWeek: dayOfWeek!,
+      })
+      .subscribe({ next: () => this.closeForm() });
+  }
+
+  // --- Delete ---
+
+  protected requestDelete(id: string): void {
+    this.deleteConfirmId.set(id);
+  }
+
+  protected confirmDelete(): void {
+    const id = this.deleteConfirmId();
+    if (id === null) return;
+    this.scheduleService.delete(id).subscribe({ next: () => this.deleteConfirmId.set(null) });
+  }
+
+  protected cancelDelete(): void {
+    this.deleteConfirmId.set(null);
+  }
+
+  // --- Helpers ---
+  protected formatTime(value: string): string {
+    return normalizeTime(value);
+  }
+
+  protected formatPrice(value: number | null | undefined): string {
+    return (value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  protected getDayName(value: DayOfWeek): string {
+    return this.dayOfWeekOptions.find((d) => d.value === value)?.label ?? 'Desconhecido';
+  }
+
+  protected fieldInvalid(field: string): boolean {
+    const ctrl = this.form.get(field);
+    return !!(ctrl?.invalid && ctrl?.touched);
+  }
+  protected bulkFieldInvalid(field: string): boolean {
+    const ctrl = this.bulkForm.get(field);
+    return !!(ctrl?.invalid && ctrl?.touched);
+  }
+}

@@ -1,0 +1,64 @@
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { inject, Injectable } from '@angular/core';
+import { Observable, catchError, throwError } from 'rxjs';
+import { environment } from '../../../../environments/environment';
+import { CompleteProfilePayload, SignUpPayload } from '../models/model-sign-up';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class ServiceSignUp {
+  // ✅ readonly em todos os campos privados
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = `${environment.apiUrl}/Auth`;
+
+  signUp(data: SignUpPayload): Observable<string> {
+    return (
+      this.http
+        .post(`${this.apiUrl}/register`, data, { responseType: 'text' })
+        // ✅ catchError centralizado no service, igual ao service-club
+        .pipe(catchError((err) => this.handleError(err)))
+    );
+  }
+
+  signUpWithGoogle(payload: { idToken: string }): Observable<string> {
+    return this.http
+      .post(`${this.apiUrl}/google/signup`, payload, {
+        responseType: 'text', // ← combina com o que o backend retorna
+      })
+      .pipe(catchError((err) => this.handleError(err)));
+  }
+  
+  completeProfile(data: CompleteProfilePayload): Observable<string> {
+  return this.http
+    .patch(`${this.apiUrl}/complete-profile`, data, {
+      responseType: 'text',
+      withCredentials: true, // ← endpoint autenticado, diferente de register/signup
+    })
+    .pipe(catchError((err) => this.handleError(err)));
+}
+
+  private handleError(err: unknown): Observable<never> {
+  if (err instanceof HttpErrorResponse) {
+    let errorMessage = 'Ocorreu um erro inesperado.';
+
+    if (typeof err.error === 'string' && err.error.trim()) {
+      try {
+        const parsedError = JSON.parse(err.error);
+        errorMessage = parsedError.Message || parsedError.message || err.error;
+      } catch {
+        errorMessage = err.error; 
+      }
+    } 
+    else if (err.error && typeof err.error === 'object') {
+      errorMessage = err.error.Message || err.error.message || errorMessage;
+    }
+
+    return throwError(() => new Error(errorMessage));
+  }
+
+  const message = err instanceof Error ? err.message : 'Ocorreu um erro inesperado.';
+  return throwError(() => new Error(message));
+}
+
+}

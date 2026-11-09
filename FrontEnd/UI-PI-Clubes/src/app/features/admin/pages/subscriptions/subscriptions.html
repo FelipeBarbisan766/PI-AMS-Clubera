@@ -1,0 +1,256 @@
+<div class="bg-base-200 min-h-screen">
+  <header class="bg-base-100 border-b border-base-300">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+      <a
+        [routerLink]="['/user-config']"
+        class="inline-flex items-center gap-1.5 text-sm text-base-content/60 hover:text-base-content transition-colors w-fit"
+        aria-label="Voltar para lista de clubes"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          class="size-4"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+        </svg>
+        Voltar
+      </a>
+      <h1 class="text-2xl font-bold text-base-content">Meu plano</h1>
+      <p class="text-sm text-base-content/60 mt-1">
+        Veja o plano contratado e quanto dele você já está usando
+      </p>
+    </div>
+  </header>
+
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+    @if (isLoading()) {
+      <div class="flex flex-col lg:flex-row gap-6" aria-busy="true" aria-label="Carregando plano">
+        <div class="w-full lg:w-72 flex-shrink-0">
+          <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-4">
+              <div class="skeleton h-5 w-32"></div>
+              <div class="skeleton h-4 w-full"></div>
+              <div class="skeleton h-4 w-full"></div>
+              <div class="skeleton h-10 w-full rounded-lg mt-2"></div>
+            </div>
+          </div>
+        </div>
+        <div class="flex-1">
+          <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-5">
+              <div class="skeleton h-5 w-40"></div>
+              <div class="skeleton h-3 w-full"></div>
+              <div class="skeleton h-3 w-full"></div>
+              <div class="skeleton h-3 w-full"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    } @else if (errorMessage()) {
+      <div role="alert" class="alert alert-error max-w-lg shadow-sm">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="15" y1="9" x2="9" y2="15" />
+          <line x1="9" y1="9" x2="15" y2="15" />
+        </svg>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    } @else if (subscription(); as sub) {
+      <div class="flex flex-col lg:flex-row gap-6">
+        <!-- Plano atual -->
+        <aside class="w-full lg:w-72 flex-shrink-0 space-y-4" aria-label="Plano atual">
+          @if (isExpiringSoon()) {
+            <div role="alert" class="alert alert-warning shadow-sm">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 shrink-0"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>
+                Seu plano expira em
+                <strong>{{ daysUntilExpiry() }} {{ daysUntilExpiry() === 1 ? 'dia' : 'dias' }}</strong>.
+              </span>
+            </div>
+          }
+
+          <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-4">
+              <p class="text-xs font-semibold text-base-content/40 uppercase tracking-widest">
+                Plano atual
+              </p>
+
+              <div class="flex items-center justify-between gap-2 flex-wrap">
+                <h2 class="text-xl font-bold text-base-content">{{ sub.planName }}</h2>
+                @if (sub.isActive) {
+                  <span class="badge badge-success badge-soft">Ativo</span>
+                } @else {
+                  <span class="badge badge-error badge-soft">Inativo</span>
+                }
+              </div>
+
+              <dl class="space-y-3 text-sm">
+                <div class="flex items-center justify-between gap-2">
+                  <dt class="text-base-content/60">Início</dt>
+                  <dd class="font-medium text-base-content">{{ formatDate(sub.startDate) }}</dd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <dt class="text-base-content/60">Expira em</dt>
+                  <dd class="font-medium" [class.text-warning]="isExpiringSoon()">
+                    {{ formatDate(sub.expiresAt) }}
+                  </dd>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <dt class="text-base-content/60">Dias restantes</dt>
+                  <dd class="font-medium text-base-content">{{ daysUntilExpiry() }}</dd>
+                </div>
+              </dl>
+
+              <div class="divider my-0"></div>
+
+              <a [routerLink]="['/plans']" class="btn btn-primary text-white w-full gap-2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m5 12 7-7 7 7" />
+                  <path d="M12 19V5" />
+                </svg>
+                Fazer upgrade
+              </a>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Uso do plano -->
+        <main class="flex-1 min-w-0" aria-label="Uso do plano">
+          <div class="card bg-base-100 shadow-sm">
+            <div class="card-body gap-6">
+              <div>
+                <h2 class="text-lg font-bold text-base-content">Uso do plano</h2>
+                <p class="text-sm text-base-content/60 mt-0.5">
+                  Quanto do limite de clubes e quadras você já utilizou
+                </p>
+              </div>
+
+              @if (limitReached()) {
+                <div role="alert" class="alert alert-warning alert-soft">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-5 w-5 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  <span>Você atingiu o limite do plano. Faça upgrade para continuar crescendo.</span>
+                </div>
+              }
+
+              @if (usage(); as u) {
+                <!-- Clubes -->
+                <section aria-labelledby="usage-clubs-title" class="space-y-2">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 id="usage-clubs-title" class="font-medium text-base-content">Clubes</h3>
+                    <span class="text-sm text-base-content/70">
+                      {{ u.clubs.used }} de {{ u.clubs.limit }}
+                    </span>
+                  </div>
+                  <progress
+                    class="progress w-full"
+                    [class.progress-warning]="isNearLimit(u.clubs)"
+                    [class.progress-error]="isAtLimit(u.clubs)"
+                    [value]="u.clubs.used"
+                    [max]="u.clubs.limit || 1"
+                    [attr.aria-label]="'Clubes utilizados: ' + u.clubs.used + ' de ' + u.clubs.limit"
+                  ></progress>
+                </section>
+
+                <div class="divider my-0"></div>
+
+                <!-- Quadras por clube -->
+                <section aria-labelledby="usage-courts-title" class="space-y-4">
+                  <div class="flex items-center justify-between gap-2">
+                    <h3 id="usage-courts-title" class="font-medium text-base-content">
+                      Quadras por clube
+                    </h3>
+                    <span class="text-xs text-base-content/50">
+                      Limite de {{ u.courtLimitPerClub }} por clube
+                    </span>
+                  </div>
+
+                  @if (u.clubsCourtUsage.length === 0) {
+                    <p class="text-sm text-base-content/50 py-4 text-center">
+                      Nenhum clube cadastrado ainda.
+                    </p>
+                  } @else {
+                    <ul class="space-y-4">
+                      @for (club of u.clubsCourtUsage; track club.clubId) {
+                        <li class="space-y-2">
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm text-base-content truncate">{{ club.clubName }}</span>
+                            <span class="text-sm text-base-content/70 shrink-0">
+                              {{ club.used }} de {{ club.limit }}
+                            </span>
+                          </div>
+                          <progress
+                            class="progress w-full"
+                            [class.progress-warning]="isNearLimit(club)"
+                            [class.progress-error]="isAtLimit(club)"
+                            [value]="club.used"
+                            [max]="club.limit || 1"
+                            [attr.aria-label]="'Quadras de ' + club.clubName + ': ' + club.used + ' de ' + club.limit"
+                          ></progress>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </section>
+              }
+            </div>
+          </div>
+        </main>
+      </div>
+    } @else {
+      <div class="card bg-base-100 shadow-sm max-w-lg mx-auto">
+        <div class="card-body items-center text-center gap-4">
+          <h2 class="text-xl font-bold text-base-content">Nenhum plano ativo</h2>
+          <p class="text-sm text-base-content/60">
+            Escolha um plano para começar a gerenciar seus clubes.
+          </p>
+          <a [routerLink]="['/plans']" class="btn btn-primary text-white px-8">Ver planos</a>
+        </div>
+      </div>
+    }
+  </div>
+</div>

@@ -1,0 +1,619 @@
+<div class="p-6 max-w-7xl mx-auto">
+  <!-- ── Cabeçalho ───────────────────────────────────────────────────── -->
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+    <div>
+      <a
+        [routerLink]="backLink()"
+        class="btn btn-ghost btn-sm -ml-3 mb-2 gap-2 text-xs font-semibold uppercase tracking-wide"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M10 19l-7-7m0 0l7-7m-7 7h18"
+          />
+        </svg>
+        Voltar para quadras
+      </a>
+
+      <h1 class="text-3xl font-bold text-base-content">
+        Horários
+        @if (court(); as c) {
+          — {{ c.name }}
+        }
+      </h1>
+      @if (courtSummary()) {
+        <p class="text-base-content/60 mt-1 text-sm">{{ courtSummary() }}</p>
+      }
+    </div>
+
+    <div class="flex gap-2">
+      <button type="button" class="btn btn-outline btn-primary" (click)="openBulkCreate()">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5 mr-1"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
+          />
+        </svg>
+        Criar em Massa
+      </button>
+      <button type="button" class="btn btn-primary text-primary-content" (click)="openCreate()">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5 mr-1"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Novo Horário
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Alertas ─────────────────────────────────────────────────────── -->
+  @if (scheduleService.error()) {
+    <div role="alert" class="alert alert-error mb-6">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="stroke-current shrink-0 h-6 w-6"
+        fill="none"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+      <span>Erro: {{ scheduleService.error() }}</span>
+    </div>
+  }
+
+  @if (scheduleService.loading()) {
+    <div class="flex justify-center my-10" role="status" aria-live="polite" aria-busy="true">
+      <span class="loading loading-spinner loading-lg text-primary" aria-hidden="true"></span>
+      <span class="sr-only">Carregando horários...</span>
+    </div>
+  }
+
+  @if (scheduleService.isEmpty() && !scheduleService.loading()) {
+    <div
+      class="text-center py-16 text-base-content/50 border-2 border-dashed border-base-300 rounded-box"
+    >
+      <p class="text-lg">Nenhum horário cadastrado para esta quadra ainda.</p>
+    </div>
+  } @else if (!scheduleService.isEmpty()) {
+    <!-- ── Abas dos dias da semana ─────────────────────────────────── -->
+    <div
+      class="flex items-center gap-2 overflow-x-auto pb-2 mb-4"
+      role="tablist"
+      aria-label="Dias da semana"
+    >
+      @for (day of weekTabs; track day.value) {
+        <button
+          type="button"
+          role="tab"
+          class="btn btn-sm shrink-0 rounded-md text-xs font-semibold uppercase tracking-wide"
+          [class.btn-primary]="activeDay() === day.value"
+          [class.bg-base-100]="activeDay() !== day.value"
+          [attr.aria-selected]="activeDay() === day.value"
+          [attr.aria-controls]="'schedule-panel'"
+          (click)="selectDay(day.value)"
+        >
+          {{ day.label }}
+          @if (countByDay()[day.value]) {
+            <span
+              class="badge badge-xs border-0"
+              [class.bg-primary-content/20]="activeDay() === day.value"
+              [class.bg-base-200]="activeDay() !== day.value"
+            >
+              {{ countByDay()[day.value] }}
+            </span>
+          }
+        </button>
+      }
+    </div>
+
+    <!-- ── Painel do dia ───────────────────────────────────────────── -->
+    <section
+      id="schedule-panel"
+      role="tabpanel"
+      class="card bg-base-100 border border-base-200 shadow-sm mb-16"
+      [attr.aria-label]="'Horários de ' + activeDayLabel()"
+    >
+      <div class="card-body p-5 sm:p-6 gap-5">
+        <h2 class="flex items-center gap-2 text-base font-bold text-base-content">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4 text-primary"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          {{ activeDayLabel() }}
+        </h2>
+
+        @if (slotsForActiveDay().length > 0) {
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="list">
+            @for (schedule of slotsForActiveDay(); track schedule.id) {
+              @if (deleteConfirmId() === schedule.id) {
+                <div
+                  role="alert"
+                  class="alert alert-warning p-3 text-xs flex-col items-start gap-2 rounded-lg"
+                >
+                  <span class="font-semibold">
+                    Excluir {{ formatTime(schedule.startTime) }} - {{ formatTime(schedule.endTime) }}?
+                  </span>
+                  <div class="flex gap-2 w-full">
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-error flex-1 text-error-content"
+                      (click)="confirmDelete()"
+                    >
+                      Excluir
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-ghost flex-1 border border-base-300"
+                      (click)="cancelDelete()"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              } @else {
+                <div
+                  role="listitem"
+                  class="flex items-center justify-between rounded-lg border border-success/30 bg-success/5 p-3 transition-colors hover:bg-success/10"
+                >
+                  <div class="flex flex-col gap-1.5">
+                    <p class="text-sm font-medium text-base-content">
+                      {{ formatTime(schedule.startTime) }} - {{ formatTime(schedule.endTime) }}
+                      <span class="text-base-content/50" aria-hidden="true">·</span>
+                      <span class="font-bold text-primary">{{ formatPrice(schedule.price) }}</span>
+                    </p>
+                    @if (durationLabel(schedule)) {
+                      <span class="badge badge-outline badge-success badge-sm font-semibold">
+                        {{ durationLabel(schedule) }}
+                      </span>
+                    }
+                  </div>
+
+                  <div class="flex gap-1">
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm btn-square text-base-content/70 hover:text-primary"
+                      aria-label="Editar horário"
+                      title="Editar"
+                      (click)="openEdit(schedule)"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm btn-square text-base-content/70 hover:text-error"
+                      aria-label="Excluir horário"
+                      title="Excluir"
+                      (click)="requestDelete(schedule.id)"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        } @else {
+          <div
+            class="py-10 text-center text-sm text-base-content/50 border-2 border-dashed border-base-300 rounded-box"
+          >
+            Nenhum horário cadastrado para {{ activeDayLabel() }}.
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  @if (formMode() === 'bulk') {
+    <app-modal>
+      <div class="flex justify-between items-center mb-4 border-b border-base-200 pb-3">
+        <h3 id="bulk-modal-title" class="font-bold text-xl text-base-content">
+          Criar Horários em Massa
+        </h3>
+        <button
+          class="btn btn-ghost btn-sm btn-circle"
+          aria-label="Fechar modal"
+          (click)="closeForm()"
+        >
+          ✕
+        </button>
+      </div>
+
+      <form [formGroup]="bulkForm" (ngSubmit)="onBulkSubmit()" class="flex flex-col gap-4">
+        <!-- Seleção de dias da semana (pills, mesmo padrão das datas) -->
+        <div>
+          <label class="py-1 font-medium text-xs text-base-content block mb-1"
+            >Dias da Semana</label
+          >
+          <div
+            class="flex gap-2 overflow-x-auto pb-2 snap-x"
+            role="group"
+            aria-label="Selecione os dias da semana"
+          >
+            @for (day of dayOfWeekOptions; track day.value) {
+              <button
+                type="button"
+                class="btn btn-sm rounded-full shrink-0 snap-start"
+                [class.btn-primary]="isDaySelected(day.value)"
+                [class.btn-ghost]="!isDaySelected(day.value)"
+                (click)="toggleDay(day.value)"
+                [attr.aria-pressed]="isDaySelected(day.value)"
+                [attr.aria-label]="'Selecionar ' + day.label"
+              >
+                {{ day.label }}
+              </button>
+            }
+          </div>
+          @if (bulkForm.touched && selectedDays().length === 0) {
+            <span role="alert" class="block text-error text-[11px] mt-1 font-medium px-1">
+              Selecione ao menos um dia
+            </span>
+          }
+        </div>
+
+        <!-- Horário e duração -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-2">
+          <div class="flex flex-col w-full">
+            <label class="py-1 font-medium text-xs text-base-content" for="bulkStartTime"
+              >Início</label
+            >
+            <input
+              id="bulkStartTime"
+              type="text"
+              inputmode="numeric"
+              formControlName="startTime"
+              mask="Hh:m0"
+              [dropSpecialCharacters]="false"
+              placeholder="08:00"
+              class="input input-bordered input-sm w-full"
+              [class.input-error]="bulkFieldInvalid('startTime')"
+              [attr.aria-invalid]="bulkFieldInvalid('startTime')"
+              [attr.aria-describedby]="bulkFieldInvalid('startTime') ? 'bulkStartTime-error' : null"
+            />
+            @if (bulkFieldInvalid('startTime')) {
+              <span
+                id="bulkStartTime-error"
+                role="alert"
+                class="block text-error text-[11px] mt-1 font-medium px-1"
+              >
+                Use o formato 24h (ex: 14:30)
+              </span>
+            }
+          </div>
+
+          <div class="flex flex-col w-full">
+            <label class="py-1 font-medium text-xs text-base-content" for="bulkEndTime"
+              >Término</label
+            >
+            <input
+              id="bulkEndTime"
+              type="text"
+              inputmode="numeric"
+              formControlName="endTime"
+              mask="Hh:m0"
+              [dropSpecialCharacters]="false"
+              placeholder="18:00"
+              class="input input-bordered input-sm w-full"
+              [class.input-error]="bulkFieldInvalid('endTime')"
+              [attr.aria-invalid]="bulkFieldInvalid('endTime')"
+              [attr.aria-describedby]="bulkFieldInvalid('endTime') ? 'bulkEndTime-error' : null"
+            />
+            @if (bulkFieldInvalid('endTime')) {
+              <span
+                id="bulkEndTime-error"
+                role="alert"
+                class="block text-error text-[11px] mt-1 font-medium px-1"
+              >
+                Use o formato 24h (ex: 18:00)
+              </span>
+            }
+          </div>
+
+          <div class="flex flex-col w-full">
+            <label class="py-1 font-medium text-xs text-base-content" for="slotDuration"
+              >Duração (min)</label
+            >
+            <input
+              id="slotDuration"
+              type="number"
+              step="15"
+              min="15"
+              formControlName="slotDurationMinutes"
+              class="input input-bordered input-sm w-full"
+              [class.input-error]="bulkFieldInvalid('slotDurationMinutes')"
+            />
+          </div>
+
+          <div class="flex flex-col w-full md:col-span-3">
+            <label class="py-1 font-medium text-xs text-base-content" for="bulkPrice"
+              >Preço (R$)</label
+            >
+            <input
+              id="bulkPrice"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0"
+              formControlName="price"
+              placeholder="0,00"
+              class="input input-bordered input-sm w-full"
+              [class.input-error]="bulkFieldInvalid('price')"
+              [attr.aria-invalid]="bulkFieldInvalid('price')"
+              [attr.aria-describedby]="bulkFieldInvalid('price') ? 'bulkPrice-error' : null"
+            />
+            @if (bulkFieldInvalid('price')) {
+              <span
+                id="bulkPrice-error"
+                role="alert"
+                class="block text-error text-[11px] mt-1 font-medium px-1"
+              >
+                Informe um preço válido (≥ 0)
+              </span>
+            }
+          </div>
+        </div>
+
+        <!-- Resultado -->
+        @if (bulkResult(); as result) {
+          <div class="flex flex-col gap-2">
+            <div role="alert" class="alert alert-soft alert-success rounded-xl text-sm">
+              <span>{{ result.created.length }} horário(s) criado(s) com sucesso.</span>
+            </div>
+            @if (result.conflicts.length) {
+              <div
+                role="alert"
+                class="alert alert-soft alert-warning rounded-xl text-sm flex-col items-start gap-2"
+              >
+                <span class="font-semibold"
+                  >{{ result.conflicts.length }} ignorado(s) por conflito:</span
+                >
+                <ul class="list-disc list-inside text-xs">
+                  @for (conflict of result.conflicts; track $index) {
+                    <li>
+                      {{ getDayName(conflict.dayOfWeek) }} {{ conflict.startTime }}–{{
+                        conflict.endTime
+                      }}
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Ações -->
+        <div class="modal-action mt-2 pt-3 border-t border-base-200">
+          <button type="button" class="btn btn-ghost btn-sm" (click)="closeForm()">Fechar</button>
+          <button
+            type="submit"
+            class="btn btn-primary btn-sm text-primary-content px-6"
+            [disabled]="!isBulkSubmitEnabled() || scheduleService.loading()"
+          >
+            @if (scheduleService.loading()) {
+              <span class="loading loading-spinner loading-xs" aria-hidden="true"></span>
+            }
+            Gerar Horários
+          </button>
+        </div>
+      </form>
+    </app-modal>
+  }
+  <!-- Modal Form -->
+  @if (formMode() === 'create' || formMode() === 'edit') {
+    <app-modal>
+      <div class="flex justify-between items-center mb-4 border-b border-base-200 pb-3">
+        <h3 id="modal-title" class="font-bold text-xl text-base-content">
+          {{ isEditing() ? 'Editar Horário' : 'Cadastrar Horário' }}
+        </h3>
+        <button
+          class="btn btn-ghost btn-sm btn-circle"
+          aria-label="Fechar modal"
+          (click)="closeForm()"
+        >
+          ✕
+        </button>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-3">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+          <div class="flex flex-col w-full">
+            <label class="py-1 font-medium text-xs text-base-content" for="startTime"
+              >Horário de Início</label
+            >
+            <input
+              id="startTime"
+              type="text"
+              inputmode="numeric"
+              formControlName="startTime"
+              mask="Hh:m0"
+              [dropSpecialCharacters]="false"
+              placeholder="08:00"
+              class="input input-bordered input-sm w-full"
+              [class.input-error]="fieldInvalid('startTime')"
+              [attr.aria-invalid]="fieldInvalid('startTime')"
+              [attr.aria-describedby]="fieldInvalid('startTime') ? 'startTime-error' : null"
+            />
+            @if (fieldInvalid('startTime')) {
+              <span
+                id="startTime-error"
+                role="alert"
+                class="block text-error text-[11px] mt-1 font-medium px-1"
+              >
+                @if (form.controls.startTime.hasError('required')) {
+                  Obrigatório
+                } @else {
+                  Use o formato 24h (ex: 14:30)
+                }
+              </span>
+            }
+          </div>
+
+          <div class="flex flex-col w-full">
+            <label class="py-1 font-medium text-xs text-base-content" for="endTime"
+              >Horário de Término</label
+            >
+            <input
+              id="endTime"
+              type="text"
+              inputmode="numeric"
+              formControlName="endTime"
+              mask="Hh:m0"
+              [dropSpecialCharacters]="false"
+              placeholder="18:00"
+              class="input input-bordered input-sm w-full"
+              [class.input-error]="fieldInvalid('endTime')"
+              [attr.aria-invalid]="fieldInvalid('endTime')"
+              [attr.aria-describedby]="fieldInvalid('endTime') ? 'endTime-error' : null"
+            />
+            @if (fieldInvalid('endTime')) {
+              <span
+                id="endTime-error"
+                role="alert"
+                class="block text-error text-[11px] mt-1 font-medium px-1"
+              >
+                @if (form.controls.endTime.hasError('required')) {
+                  Obrigatório
+                } @else {
+                  Use o formato 24h (ex: 18:00)
+                }
+              </span>
+            }
+          </div>
+
+          <div class="flex flex-col w-full md:col-span-2">
+            <label class="py-1 font-medium text-xs text-base-content" for="price"
+              >Preço (R$)</label
+            >
+            <input
+              id="price"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0"
+              formControlName="price"
+              placeholder="0,00"
+              class="input input-bordered input-sm w-full"
+              [class.input-error]="fieldInvalid('price')"
+              [attr.aria-invalid]="fieldInvalid('price')"
+              [attr.aria-describedby]="fieldInvalid('price') ? 'price-error' : null"
+            />
+            @if (fieldInvalid('price')) {
+              <span
+                id="price-error"
+                role="alert"
+                class="block text-error text-[11px] mt-1 font-medium px-1"
+              >
+                Informe um preço válido (≥ 0)
+              </span>
+            }
+          </div>
+
+          <div class="flex flex-col w-full md:col-span-2">
+            <label class="py-1 font-medium text-xs text-base-content" for="dayOfWeek"
+              >Dia da Semana</label
+            >
+            <select
+              id="dayOfWeek"
+              formControlName="dayOfWeek"
+              class="select select-bordered select-sm w-full"
+              [class.select-error]="fieldInvalid('dayOfWeek')"
+            >
+              <option [value]="null" disabled>Selecione um dia</option>
+              @for (option of dayOfWeekOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+            @if (fieldInvalid('dayOfWeek')) {
+              <span role="alert" class="block text-error text-[11px] mt-1 font-medium px-1"
+                >Obrigatório</span
+              >
+            }
+          </div>
+        </div>
+
+        <!-- Ações do Modal -->
+        <div class="modal-action mt-4 pt-3 border-t border-base-200">
+          <button type="button" class="btn btn-ghost btn-sm" (click)="closeForm()">Cancelar</button>
+          <button
+            type="submit"
+            class="btn btn-primary btn-sm text-primary-content px-6"
+            [disabled]="!isSubmitEnabled() || scheduleService.loading()"
+          >
+            @if (scheduleService.loading()) {
+              <span class="loading loading-spinner loading-xs" aria-hidden="true"></span>
+            }
+            Salvar Horário
+          </button>
+        </div>
+      </form>
+    </app-modal>
+  }
+</div>

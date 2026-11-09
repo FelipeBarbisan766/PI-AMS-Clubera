@@ -1,0 +1,308 @@
+<main class="min-h-screen w-full bg-base-200 flex flex-col items-center px-4 py-12 pt-20">
+  <header class="text-center mb-12 max-w-2xl">
+    <h1 class="text-3xl md:text-4xl font-bold mb-3">Escolha seu plano</h1>
+    <p class="text-sm md:text-base text-base-content/70">
+      Selecione o plano ideal para o seu negócio e gerencie seus clubes com facilidade.
+    </p>
+  </header>
+
+  @if (isLoading()) {
+    <div
+      class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+      aria-busy="true"
+      aria-label="Carregando planos"
+    >
+      @for (item of skeletonItems; track item) {
+        <div class="skeleton h-80 w-full rounded-2xl" aria-hidden="true"></div>
+      }
+    </div>
+  }
+
+  @if (!isLoading() && errorMessage()) {
+    <div class="w-full max-w-md">
+      <div
+        class="alert alert-error alert-soft flex-col text-center gap-3 py-8"
+        role="alert"
+        aria-live="assertive"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-8 w-8 shrink-0"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+          />
+        </svg>
+        <span>{{ errorMessage() }}</span>
+        <button
+          type="button"
+          class="btn btn-sm btn-error rounded-full"
+          (click)="retryLoad()"
+          aria-label="Tentar novamente"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (!isLoading() && !errorMessage() && plans().length === 0) {
+    <div class="text-center text-base-content/60 py-16">
+      <p>Nenhum plano disponível no momento.</p>
+    </div>
+  }
+
+  @if (!isLoading() && !errorMessage() && plans().length > 0) {
+    <ul
+      class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch"
+      aria-label="Planos disponíveis"
+    >
+      @for (plan of plans(); track plan.id) {
+        <li class="flex">
+          <article
+            class="card w-full bg-base-100 border border-base-300 rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+            [class.border-primary]="plan.id === popularPlanId() || isCurrent(plan)"
+            [class.ring-2]="isCurrent(plan)"
+            [class.ring-primary]="isCurrent(plan)"
+            [class.shadow-lg]="plan.id === popularPlanId() || isCurrent(plan)"
+            [class.lg:scale-105]="plan.id === popularPlanId()"
+          >
+            <div class="card-body gap-5">
+              <!-- Plan name + badge -->
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="text-lg font-bold">{{ plan.name }}</h2>
+                @if (isCurrent(plan)) {
+                  <span
+                    class="badge badge-primary badge-sm text-white"
+                    aria-label="Este é o seu plano atual"
+                  >
+                    Plano atual
+                  </span>
+                } @else if (plan.id === popularPlanId()) {
+                  <span
+                    class="badge badge-primary badge-sm text-white"
+                    aria-label="Plano mais popular"
+                  >
+                    Mais popular
+                  </span>
+                }
+              </div>
+
+              <p class="text-sm text-base-content/70 -mt-3">{{ plan.description }}</p>
+
+              <div aria-label="Preço do plano" class="pb-1">
+                <span class="text-4xl font-bold" [class.text-primary]="plan.id === popularPlanId()">
+                  {{ formatPrice(plan.price) }}
+                </span>
+                <span class="text-sm text-base-content/60">{{
+                  formatDuration(plan.durationDays)
+                }}</span>
+              </div>
+
+              <div class="divider my-0"></div>
+
+              <ul
+                class="flex flex-col gap-3 text-sm text-base-content/80 grow"
+                aria-label="Recursos do plano"
+              >
+                <li class="flex items-center gap-2.5">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4 w-4 text-primary shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                    />
+                  </svg>
+                  <span>
+                    {{ plan.quantClub }}
+                    {{ plan.quantClub === 1 ? 'clube' : 'clubes' }}
+                  </span>
+                </li>
+
+                <li class="flex items-center gap-2.5">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="h-4 w-4 text-primary lucide lucide-map-pin-icon lucide-map-pin"
+                  >
+                    <path
+                      d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
+                    />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  <span>{{ plan.quantCourt }} quadras por clube</span>
+                </li>
+
+                <li class="flex items-center gap-2.5">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4 w-4 text-primary shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <span>Renova a cada {{ plan.durationDays }} dias</span>
+                </li>
+              </ul>
+
+              <div class="card-actions">
+                <button
+                  type="button"
+                  class="btn w-full rounded-lg font-bold"
+                  [class.bg-primary]="!isActionDisabled(plan)"
+                  [class.text-primary-content]="!isActionDisabled(plan)"
+                  [class.border-none]="!isActionDisabled(plan)"
+                  [class.btn-outline]="isCurrent(plan)"
+                  [disabled]="isActionDisabled(plan)"
+                  [attr.aria-busy]="isSubmitting()"
+                  (click)="selectPlan(plan.id)"
+                  [attr.aria-label]="
+                    isCurrent(plan)
+                      ? 'Plano atual: ' + plan.name
+                      : (isFree(plan) ? 'Começar com o plano ' : 'Assinar o plano ') + plan.name
+                  "
+                >
+                  @if (isSubmitting() && !isCurrent(plan)) {
+                    <span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
+                  } @else if (isCurrent(plan)) {
+                    Plano atual
+                  } @else {
+                    {{ isFree(plan) ? 'Começar grátis' : 'Assinar' }}
+                  }
+                </button>
+              </div>
+            </div>
+          </article>
+        </li>
+      }
+
+      <li class="flex">
+        <article
+          class="card w-full bg-base-100 border border-base-300 rounded-2xl transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+        >
+          <div class="card-body gap-5">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-lg font-bold">Personalizado</h2>
+            </div>
+
+            <p class="text-sm text-base-content/70 -mt-3">
+              Defina quantos clubes e quadras você precisa e pague só por isso.
+            </p>
+
+            <div aria-label="Preço do plano" class="pb-1">
+              <span class="text-4xl font-bold">Sob medida</span>
+            </div>
+
+            <div class="divider my-0"></div>
+
+            <ul
+              class="flex flex-col gap-3 text-sm text-base-content/80 grow"
+              aria-label="Recursos do plano personalizado"
+            >
+              <li class="flex items-center gap-2.5">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-4 w-4 text-primary shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect width="16" height="20" x="4" y="2" rx="2" />
+                  <line x1="8" x2="16" y1="6" y2="6" />
+                  <line x1="16" x2="16" y1="14" y2="18" />
+                  <path d="M16 10h.01" /><path d="M12 10h.01" /><path d="M8 10h.01" />
+                  <path d="M12 14h.01" /><path d="M8 14h.01" />
+                  <path d="M12 18h.01" /><path d="M8 18h.01" />
+                </svg>
+                <span>Quantidade de clubes à sua escolha</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="h-4 w-4 text-primary shrink-0"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"
+                  />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                <span>Quadras por clube à sua escolha</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  class="h-4 w-4 text-primary shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+                <span>Valor calculado na hora</span>
+              </li>
+            </ul>
+
+            <div class="card-actions">
+              <button
+                type="button"
+                class="btn w-full rounded-lg btn-outline font-bold"
+                aria-haspopup="dialog"
+                [disabled]="isSubmitting()"
+                (click)="openCalculator()"
+              >
+                Calcular meu plano
+              </button>
+            </div>
+          </div>
+        </article>
+      </li>
+    </ul>
+  }
+
+  <app-plan-calculator-modal #calculator (confirmed)="onCustomPlanConfirmed($event)" />
+</main>

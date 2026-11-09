@@ -1,0 +1,26 @@
+import { inject } from '@angular/core';
+import { CanActivateFn, Router } from '@angular/router';
+import { AuthService } from '../services/auth-service';
+import { map } from 'rxjs/operators';
+
+const normalizeRole = (role: string | null | undefined): string =>
+  (role ?? '').trim().toLowerCase();
+
+export const adminGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  return auth.resolveSession().pipe(
+    map((user) => {
+      if (!user) {
+        return router.parseUrl('/login');
+      }
+
+      const role = normalizeRole(user.role);
+
+      return role === 'admin'
+        ? true
+        : router.parseUrl('/');
+    })
+  );
+};

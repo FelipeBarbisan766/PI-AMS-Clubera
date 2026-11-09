@@ -1,0 +1,196 @@
+﻿using API_PI_Clubes.Application.DTOs;
+using API_PI_Clubes.Application.Interfaces.IRepositories;
+using API_PI_Clubes.Infrastructure.Data;
+using API_PI_Clubes.Model;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+
+namespace API_PI_Clubes.Infrastructure.Repositories
+{
+    public class CourtRepository : ICourtRepository
+    {
+        private readonly AppDbContext _context;
+
+        public CourtRepository(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<(IEnumerable<ResponseCourtDTO> Items, int TotalCount)> GetAllAsync(CourtQueryDTO query,
+            CancellationToken cancellationToken)
+        {
+            var q = _context.Courts
+                .Where(c => c.IsActive && c.IsCourtActive)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(query.Name))
+                q = q.Where(c => c.Name.Contains(query.Name));
+
+            if (!string.IsNullOrWhiteSpace(query.City))
+                q = q.Where(c => c.Club.Address.City.Contains(query.City));
+
+            if (query.SportIds != null && query.SportIds.Count > 0)
+                q = q.Where(c => c.CourtSports.Any(cs => query.SportIds.Contains(cs.SportId)));
+
+            var totalCount = await q.CountAsync(cancellationToken);
+
+            var items = await q
+                .Select(c => new ResponseCourtDTO
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Surface = c.Surface,
+                    IsCovered = c.IsCovered,
+                    MinPrice = c.Schedules
+                        .Where(s => s.IsActive)
+                        .Min(s => (decimal?)s.Price) ?? 0,
+                    Description = c.Description,
+                    IsCourtActive = c.IsCourtActive,
+                    ClubId = c.ClubId,
+                    Sports = c.CourtSports
+                        .Select(cs => new ResponseSportDTO { Id = cs.Sport.Id, Name = cs.Sport.Name })
+                        .ToList(),
+                    Images = c.Images
+                        .OrderBy(i => i.Order)
+                        .Select(i => new ImageDTO
+                        {
+                            Id = i.Id,
+                            ThumbUrl = i.ThumbUrl,
+                            MediumUrl = i.MediumUrl,
+                            FullUrl = i.FullUrl,
+                            Order = i.Order
+                        })
+                        .ToList()
+                })
+                .OrderBy(c => c.Name)
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
+                .ToListAsync(cancellationToken);
+
+            return (items, totalCount);
+        }
+
+        public async Task<Court?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Courts
+                .Where(u => u.Id == id && u.IsActive)
+                .Include(c => c.Images.OrderBy(i => i.Order))
+                .Include(c => c.CourtSports)
+                .ThenInclude(cs => cs.Sport)
+                .Include(c => c.Schedules)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+
+        public async Task<List<ResponseCourtDTO>> GetAllByClubIdAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Courts
+                .Where(c => c.ClubId == id && c.IsActive)
+                .Select(c => new ResponseCourtDTO
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Surface = c.Surface,
+                    IsCovered = c.IsCovered,
+                    MinPrice = c.Schedules
+                        .Where(s => s.IsActive)
+                        .Min(s => (decimal?)s.Price) ?? 0,
+                    MaxPrice = c.Schedules
+                        .Where(s => s.IsActive)
+                        .Max(s => (decimal?)s.Price) ?? 0,
+                    Description = c.Description,
+                    IsCourtActive = c.IsCourtActive,
+                    ClubId = c.ClubId,
+                    Sports = c.CourtSports
+                        .Select(cs => new ResponseSportDTO { Id = cs.Sport.Id, Name = cs.Sport.Name })
+                        .ToList(),
+                    Images = c.Images
+                        .OrderBy(i => i.Order)
+                        .Select(i => new ImageDTO
+                        {
+                            Id = i.Id,
+                            ThumbUrl = i.ThumbUrl,
+                            MediumUrl = i.MediumUrl,
+                            FullUrl = i.FullUrl,
+                            Order = i.Order
+                        })
+                        .ToList()
+                })
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<Court?> GetByIdWithImagesAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Courts
+                .Where(u => u.Id == id && u.IsActive)
+                .Include(c => c.Images.OrderBy(i => i.Order))
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        public async Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Courts
+                .AnyAsync(s => s.Id == id && s.IsActive, cancellationToken);
+        }
+
+        public async Task AddAsync(Court Court, CancellationToken cancellationToken)
+        {
+            await _context.Courts.AddAsync(Court, cancellationToken);
+        }
+
+        public void Update(Court Court)
+        {
+            _context.Courts.Update(Court);
+        }
+
+        public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+                var now = DateTime.UtcNow;
+
+                await _context.Schedules
+                    .Where(s => s.IsActive && s.CourtId == id)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.IsActive, false)
+                        .SetProperty(x => x.UpdatedAt, now), cancellationToken);
+
+                await _context.Courts
+                    .Where(c => c.Id == id)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.IsActive, false)
+                        .SetProperty(x => x.UpdatedAt, now), cancellationToken);
+
+                await tx.CommitAsync(cancellationToken);
+            });
+        }
+
+        public async Task SaveChangesAsync(CancellationToken cancellationToken)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<bool> IsOwnedByUserAsync(Guid Id, Guid userId, CancellationToken cancellationToken)
+        {
+            return await _context.Courts
+                .AnyAsync(c => c.Id == Id && c.Club.ClubAdmin.Any(a => a.Admin.UserId == userId), cancellationToken);
+        }
+
+        public async Task<int> CountByClubIdAsync(Guid clubId, CancellationToken cancellationToken)
+        {
+            return await _context.Courts
+                .CountAsync(c => c.IsActive && c.IsCourtActive && c.ClubId == clubId, cancellationToken);
+        }
+
+        public async Task<Court?> GetByIdForToggleAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Courts
+                .Include(c => c.Club)
+                .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        }
+    }
+}

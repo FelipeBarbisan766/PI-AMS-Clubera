@@ -1,0 +1,380 @@
+﻿using API_PI_Clubes.Application.DTOs;
+using API_PI_Clubes.Application.Interfaces.IRepositories;
+using API_PI_Clubes.Infrastructure.Data;
+using API_PI_Clubes.Infrastructure.Extensions;
+using API_PI_Clubes.Model;
+using API_PI_Clubes.Model.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+
+namespace API_PI_Clubes.Infrastructure.Repositories
+{
+    public class ClubRepository : IClubRepository
+    {
+        private readonly AppDbContext _context;
+
+        public ClubRepository(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<(IEnumerable<ResponseClubDTO> Items, int TotalCount)> GetAllAsync(ClubQueryDTO query,
+            CancellationToken cancellationToken)
+        {
+            var q = _context.Clubs
+                .Where(c => c.IsActive && c.IsClubActive)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(query.Name))
+                q = q.Where(c => c.Name.Contains(query.Name));
+
+            if (!string.IsNullOrWhiteSpace(query.City))
+                q = q.Where(c => c.Address.City.Contains(query.City));
+
+            if (query.SportIds != null && query.SportIds.Count > 0)
+                q = q.Where(c => c.Courts
+                    .Any(co => co.IsActive && co.CourtSports.Any(cs => query.SportIds.Contains(cs.SportId))));
+
+
+            var totalCount = await q.CountAsync(cancellationToken);
+
+            var items = await ApplySorting(
+                    q.Select(c => new ResponseClubDTO
+                    {
+                        Id = c.Id,
+                        Name = c.Name,
+                        PhoneNumber = c.PhoneNumber,
+                        Description = c.Description,
+                        Street = c.Address.Street,
+                        City = c.Address.City,
+                        State = c.Address.State,
+                        Country = c.Address.Country,
+                        IsClubActive = c.IsClubActive,
+                        MinPrice = c.Courts
+                            .Where(co => co.IsActive)
+                            .SelectMany(co => co.Schedules)
+                            .Where(sc => sc.IsActive)
+                            .Min(sc => (decimal?)sc.Price) ?? 0,
+                        CourtCount = c.Courts.Count(co => co.IsActive),
+                        Sports = c.Courts.Where(co => co.IsActive)
+                            .SelectMany(co => co.CourtSports)
+                            .Select(cs => new { cs.Sport.Id, cs.Sport.Name })
+                            .Distinct()
+                            .Select(x => new ResponseSportDTO { Id = x.Id, Name = x.Name })
+                            .ToList(),
+                        AverageRating = c.Reviews.Any()
+                            ? Math.Round(c.Reviews.Average(r => r.Rating), 1)
+                            : 0,
+                        TotalReviews = c.Reviews.Count(),
+                        Images = c.Images
+                            .OrderBy(i => i.Order)
+                            .Select(i => new ImageDTO
+                            {
+                                Id = i.Id,
+                                ThumbUrl = i.ThumbUrl,
+                                MediumUrl = i.MediumUrl,
+                                FullUrl = i.FullUrl,
+                                Order = i.Order
+                            })
+                            .ToList()
+                    }),
+                    query)
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
+                .ToListAsync(cancellationToken);
+
+            return (items, totalCount);
+        }
+
+        public async Task<Club?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .Where(u => u.Id == id && u.IsActive && u.IsClubActive)
+                .AsNoTracking()
+                .Include(c => c.Images.OrderBy(i => i.Order))
+                .Include(c => c.Courts.Where(co => co.IsActive && co.IsCourtActive))
+                .ThenInclude(co => co.Images.OrderBy(i => i.Order))
+                .Include(c => c.Courts.Where(co => co.IsActive && co.IsCourtActive))
+                .ThenInclude(co => co.CourtSports)
+                .ThenInclude(cs => cs.Sport)
+                .Include(c => c.Courts.Where(co => co.IsActive && co.IsCourtActive))
+                .ThenInclude(co => co.Schedules)
+                .Include(c => c.Reviews)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        public async Task<Club?> GetByIdWithImagesAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .Where(u => u.Id == id && u.IsActive)
+                .Include(c => c.Images.OrderBy(i => i.Order))
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        public async Task<List<ResponseClubDTO>> GetAllByAdminIdAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .AsQueryable()
+                .Where(c => c.ClubAdmin.Any(ca => ca.AdminId == id) && c.IsActive)
+                .Select(c => new ResponseClubDTO
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    PhoneNumber = c.PhoneNumber,
+                    Description = c.Description,
+                    Street = c.Address.Street,
+                    City = c.Address.City,
+                    State = c.Address.State,
+                    Country = c.Address.Country,
+                    IsClubActive = c.IsClubActive,
+                    MinPrice = c.Courts
+                        .Where(co => co.IsActive)
+                        .SelectMany(co => co.Schedules)
+                        .Where(sc => sc.IsActive)
+                        .Min(sc => (decimal?)sc.Price) ?? 0,
+
+
+                    CourtCount = c.Courts.Count(co => co.IsActive),
+
+                    Sports = c.Courts.Where(co => co.IsActive)
+                        .SelectMany(co => co.CourtSports)
+                        .Select(cs => new { cs.Sport.Id, cs.Sport.Name })
+                        .Distinct()
+                        .Select(x => new ResponseSportDTO { Id = x.Id, Name = x.Name })
+                        .ToList(),
+                    AverageRating = c.Reviews.Any()
+                        ? Math.Round(c.Reviews.Average(r => r.Rating), 1)
+                        : 0,
+                    TotalReviews = c.Reviews.Count(),
+                    Images = c.Images
+                        .OrderBy(i => i.Order)
+                        .Select(i => new ImageDTO
+                        {
+                            Id = i.Id,
+                            ThumbUrl = i.ThumbUrl,
+                            MediumUrl = i.MediumUrl,
+                            FullUrl = i.FullUrl,
+                            Order = i.Order
+                        })
+                        .ToList()
+                })
+                .ToListAsync(cancellationToken);
+        }
+
+
+        public async Task<ResponseDashboardDTO?> GetDashboardAsync(Guid clubId, CancellationToken cancellationToken)
+        {
+            var stats = await _context.Clubs
+                .AsNoTracking()
+                .Where(c => c.Id == clubId && c.IsActive)
+                .Select(c => new
+                {
+                    QuantCourt = c.Courts.Count(co => co.IsActive),
+                    QuantReserveToday = c.Courts
+                        .SelectMany(co => co.Schedules)
+                        .SelectMany(s => s.Reserves)
+                        .Count(r => r.IsActive && r.Date.Date == DateTime.Today),
+                    CountPlayers = c.Courts
+                        .SelectMany(co => co.Schedules)
+                        .SelectMany(s => s.Reserves)
+                        .Where(r => r.IsActive)
+                        .Select(r => r.PlayerId)
+                        .Distinct()
+                        .Count()
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (stats == null)
+                return null;
+
+            var recentReserves = await _context.Reserves
+                .AsNoTracking()
+                .Where(r => r.IsActive && r.Schedule.Court.ClubId == clubId)
+                .OrderByDescending(r => r.Date)
+                .Take(4)
+                .Select(r => new ResponseReserveDetailDTO
+                {
+                    Id = r.Id,
+                    Date = r.Date,
+                    Status = r.Status,
+                    Name = r.Player.User.Name,
+                    PhoneNumber = r.Player.User.PhoneNumber,
+                    UserId = r.Player.UserId,
+                    DateOfReservation = r.CreatedAt,
+                    Schedule = new ScheduleReserveDTO
+                    {
+                        StartTime = r.Schedule.StartTime,
+                        EndTime = r.Schedule.EndTime,
+                        Price = r.Schedule.Price,
+                        Court = new CourtReserveDTO
+                        {
+                            Name = r.Schedule.Court.Name,
+                            Sports = r.Schedule.Court.CourtSports
+                                .Select(cs => new ResponseSportDTO { Id = cs.Sport.Id, Name = cs.Sport.Name })
+                                .ToList()
+                        }
+                    }
+                })
+                .ToListAsync(cancellationToken);
+
+            return new ResponseDashboardDTO
+            {
+                QuantCourt = stats.QuantCourt,
+                QuantReserveToday = stats.QuantReserveToday,
+                CountPlayers = stats.CountPlayers,
+                ClubReserve = recentReserves
+            };
+        }
+
+        private static IOrderedQueryable<ResponseClubDTO> ApplySorting(
+            IQueryable<ResponseClubDTO> source, ClubQueryDTO query)
+        {
+            var desc = query.SortDirection == SortDirection.Desc;
+
+            var ordered = query.SortBy switch
+            {
+                ClubSortBy.Price => source.OrderByDirection(c => c.MinPrice, desc),
+                ClubSortBy.Rating => source.OrderByDirection(c => c.AverageRating, desc),
+                ClubSortBy.Reviews => source.OrderByDirection(c => c.TotalReviews, desc),
+                ClubSortBy.CourtCount => source.OrderByDirection(c => c.CourtCount, desc),
+                _ => source.OrderByDirection(c => c.Name, desc)
+            };
+
+            return ordered.ThenBy(c => c.Id);
+        }
+
+        public async Task<bool> ExistsAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .AnyAsync(s => s.Id == id && s.IsActive, cancellationToken);
+        }
+
+        public async Task AddAsync(Club club, CancellationToken cancellationToken)
+        {
+            await _context.Clubs.AddAsync(club, cancellationToken);
+        }
+
+        public async Task AddClubAdminAsync(ClubAdmin clubAdmin, CancellationToken cancellationToken)
+        {
+            await _context.ClubAdmins.AddAsync(clubAdmin, cancellationToken);
+        }
+
+        public void Update(Club club)
+        {
+            _context.Clubs.Update(club);
+        }
+
+        public async Task DeleteAsync(Guid id, CancellationToken cancellationToken)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+                var now = DateTime.UtcNow;
+
+                await _context.Schedules
+                    .Where(s => s.IsActive && s.Court.ClubId == id)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.IsActive, false)
+                        .SetProperty(x => x.UpdatedAt, now), cancellationToken);
+
+                await _context.Courts
+                    .Where(c => c.IsActive && c.ClubId == id)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.IsActive, false)
+                        .SetProperty(x => x.UpdatedAt, now), cancellationToken);
+
+                await _context.Clubs
+                    .Where(c => c.Id == id)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.IsActive, false)
+                        .SetProperty(x => x.UpdatedAt, now), cancellationToken);
+
+                await tx.CommitAsync(cancellationToken);
+            });
+        }
+
+        public async Task SaveChangesAsync(CancellationToken cancellationToken)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<bool> IsOwnedByUserAsync(Guid clubId, Guid userId, CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .AnyAsync(c => c.Id == clubId && c.ClubAdmin.Any(a => a.Admin.UserId == userId), cancellationToken);
+        }
+
+        public async Task<int> CountByUserIdAsync(Guid userId, CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .CountAsync(c => c.IsActive && c.IsClubActive && c.ClubAdmin.Any(ca => ca.Admin.UserId == userId),
+                    cancellationToken);
+        }
+
+        public async Task<List<ClubCourtUsageDTO>> GetClubsWithCourtCountByUserIdAsync(Guid userId,
+            CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .Where(c => c.IsActive && c.IsClubActive && c.ClubAdmin.Any(ca => ca.Admin.UserId == userId))
+                .Select(c => new ClubCourtUsageDTO
+                {
+                    ClubId = c.Id,
+                    ClubName = c.Name,
+                    Used = c.Courts.Where(co => co.IsActive && co.IsCourtActive).Count(co => co.IsActive)
+                })
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<Club?> GetByIdForToggleAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .Include(c => c.Courts)
+                .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        }
+
+        public async Task<List<Club>> GetActiveWithActiveCourtsByAdminIdAsync(Guid adminId,
+            CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .Where(c => c.IsActive && c.ClubAdmin.Any(ca => ca.AdminId == adminId))
+                .Include(c => c.Courts.Where(court => court.IsActive))
+                .ToListAsync(cancellationToken);
+        }
+        public async Task<ShareClubDataDTO?> GetShareDataAsync(Guid clubId, CancellationToken cancellationToken)
+        {
+            return await _context.Clubs
+                .AsNoTracking()
+                .Where(c => c.Id == clubId && c.IsActive && c.IsClubActive)
+                .Select(c => new ShareClubDataDTO
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    City = c.Address.City,
+                    State = c.Address.State,
+                    MinPrice = c.Courts
+                        .Where(co => co.IsActive && co.IsCourtActive)
+                        .SelectMany(co => co.Schedules)
+                        .Where(sc => sc.IsActive)
+                        .Min(sc => (decimal?)sc.Price),
+                    Sports = c.Courts
+                        .Where(co => co.IsActive && co.IsCourtActive)
+                        .SelectMany(co => co.CourtSports)
+                        .Select(cs => cs.Sport.Name)
+                        .Distinct()
+                        .ToList(),
+                    CoverImageId = c.Images
+                        .OrderBy(i => i.Order)
+                        .Select(i => (Guid?)i.Id)
+                        .FirstOrDefault(),
+                    CoverUrl = c.Images
+                        .OrderBy(i => i.Order)
+                        .Select(i => i.MediumUrl)
+                        .FirstOrDefault()
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+    }
+}

@@ -1,0 +1,189 @@
+<div
+  class="w-full min-h-[calc(100vh-var(--nav-h))] pattern-background flex items-center justify-center py-12 px-4"
+>
+  <div
+    class="card w-full max-w-lg bg-base-100 shadow-xl rounded-3xl overflow-hidden border border-base-300"
+  >
+    <!-- <div class="m-4">
+
+      <a
+            [routerLink]="['/']"
+            class="inline-flex items-center gap-1.5 text-sm text-base-content/60 hover:text-base-content transition-colors w-fit"
+            aria-label="Voltar para lista de clubes"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="size-4"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
+              />
+            </svg>
+            Voltar ao site
+          </a>
+        </div> -->
+
+    <div class="card-body p-6 md:p-8">
+      <div class="text-center mb-6">
+        <h1 class="text-2xl md:text-3xl font-bold text-base-content mb-2">Faça seu login</h1>
+        <p class="text-base-content/60 text-sm">Entre com suas credenciais para acessar sua conta.</p>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-4">
+        <div class="form-group">
+          <label for="email" class="text-sm font-medium text-base-content block pb-2">
+            E-mail
+          </label>
+
+          <div class="input w-full">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="opacity-50 shrink-0"
+              aria-hidden="true"
+            >
+              <rect width="20" height="16" x="2" y="4" rx="2" />
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+            </svg>
+
+            <input
+              id="email"
+              type="email"
+              formControlName="email"
+              class="grow text-sm"
+              placeholder="seu@email.com"
+              EmailDirective
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password" class="text-sm font-medium text-base-content block pb-2">
+            Senha
+          </label>
+
+          <div class="input w-full">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="opacity-50 shrink-0"
+              aria-hidden="true"
+            >
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+
+            <input
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              formControlName="password"
+              class="grow text-sm"
+              placeholder="●●●●●●"
+              autocomplete="current-password"
+            />
+
+            <button
+              type="button"
+              class="shrink-0 text-base-content/50 hover:text-base-content transition-colors"
+              (click)="toggleShowPassword()"
+              [attr.aria-label]="showPassword() ? 'Ocultar senha' : 'Mostrar senha'"
+              [attr.aria-pressed]="showPassword()"
+            >
+              @if (showPassword()) {
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                </svg>
+              } @else {
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+              }
+            </button>
+          </div>
+        </div>
+
+        @if (errorMessage()) {
+          <p class="text-error text-sm text-center" role="alert">
+            {{ errorMessage() }}
+          </p>
+        }
+
+        <div class="mt-2 pt-2 flex flex-col gap-3">
+          <button
+            type="submit"
+            class="btn btn-primary w-full rounded-lg font-semibold text-white shadow-lg hover:shadow-primary/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            [disabled]="isSubmitting()"
+            [attr.aria-busy]="isSubmitting()"
+          >
+            @if (isSubmitting()) {
+              <span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
+              <span class="sr-only">Carregando...</span>
+            } @else {
+              Entrar
+            }
+          </button>
+
+          <div class="flex items-center gap-3" aria-hidden="true">
+            <hr class="flex-1 border-base-300" />
+            <span class="text-base-content/40 text-xs">ou</span>
+            <hr class="flex-1 border-base-300" />
+          </div>
+
+          <div #googleBtn aria-label="Entrar com Google" class="flex justify-center"></div>
+        </div>
+
+        <div class="text-center pt-1">
+          <p class="text-base-content/60 text-xs md:text-sm">
+            Não tem uma conta?
+            <a
+              routerLink="/sign-up"
+              class="link link-primary no-underline font-semibold hover:underline"
+            >
+              Criar conta
+            </a>
+          </p>
+        </div>
+
+        <div class="flex items-center gap-3" aria-hidden="true">
+          <hr class="flex-1 border-base-300" />
+        </div>
+
+        <div class="text-center pt-1">
+          <p class="text-base-content/60 text-xs md:text-sm">
+            Esqueceu sua senha?
+            <a
+              routerLink="/forgot-password"
+              class="link link-primary no-underline font-semibold hover:underline"
+            >
+              Recuperar senha
+            </a>
+          </p>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

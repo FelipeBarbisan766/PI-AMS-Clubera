@@ -1,0 +1,353 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import {
+  debounceTime,
+  distinctUntilChanged,
+  filter,
+  finalize,
+  map,
+  switchMap,
+} from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ServiceClub } from '../../services/service-club';
+import { AuthService } from '../../../../core/services/auth-service';
+import { Modal } from '../../../../shared/components/modal/modal';
+import { ViaCepService } from '../../../../core/services/via-cep';
+import { NgxMaskDirective } from 'ngx-mask';
+import { NgOptimizedImage } from '@angular/common';
+import { CountryEnum, ResponseClubDTO } from '../../models/model-club';
+import { ToastAlert } from '../../../../shared/components/toast-alert/toast-alert';
+import { ServiceSubscriptionUsage } from '../../services/service-subscription-usage';
+import { getApiErrorMessage, isLimitExceededError } from '../../../../core/utils/api-error';
+import { TextDirective } from '../../../../shared/directives/text-directive';
+
+type FormMode = 'create' | 'edit' | null;
+type ToastState = { message: string; type: 'success' | 'error' | 'warning' | 'info' };
+
+@Component({
+  selector: 'app-club',
+  imports: [
+    ReactiveFormsModule,
+    Modal,
+    NgxMaskDirective,
+    NgOptimizedImage,
+    RouterLink,
+    ToastAlert,
+    TextDirective,
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './clubs.html',
+})
+export class Clubs implements OnInit {
+  private readonly fb = inject(FormBuilder);
+  private readonly router = inject(Router);
+  private readonly authService = inject(AuthService);
+  private readonly viaCepService = inject(ViaCepService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly usageService = inject(ServiceSubscriptionUsage);
+
+  // --- Limite do plano ---
+  protected readonly planName = this.usageService.planName;
+  protected readonly clubsUsage = this.usageService.clubsUsage;
+  protected readonly canCreateClub = this.usageService.canCreateClub;
+  protected readonly limitReached = computed(() => {
+    const usage = this.clubsUsage();
+    return !!usage && usage.used >= usage.limit;
+  });
+
+  
+
+  // --- Toast ---
+  protected readonly toast = signal<ToastState | null>(null);
+
+  protected dismissToast(): void {
+    this.toast.set(null);
+  }
+
+  private showLimitToast(message?: string): void {
+    const usage = this.clubsUsage();
+    this.toast.set({
+      message:
+        message ??
+        `Você atingiu o limite de ${usage?.limit ?? ''} clube(s) do seu plano. Faça upgrade para adicionar mais.`,
+      type: 'warning',
+    });
+  }
+  protected readonly togglingIds = signal<ReadonlySet<string>>(new Set());
+  private readonly me = this.authService.me;
+
+  protected readonly countryOptions = Object.values(CountryEnum);
+
+  readonly avatarUrl = computed(() => this.me()?.avatarUrl);
+  readonly displayName = computed(() => this.me()?.name?.trim() || 'Usuário');
+  readonly initials = computed(() => {
+    const name = this.me()?.name?.trim();
+    if (!name) {
+      return 'U';
+    }
+    const parts = name.split(' ');
+    if (parts.length === 1) {
+      return parts[0][0].toUpperCase();
+    }
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  });
+
+  protected readonly clubService = inject(ServiceClub);
+
+  protected readonly formMode = signal<FormMode>(null);
+  protected readonly selectedFiles = signal<File[]>([]);
+
+  private adminId: string | null = null;
+
+  protected readonly isFormOpen = computed(() => this.formMode() !== null);
+
+  protected readonly form = this.fb.group({
+    name: ['', [Validators.required, Validators.minLength(3)]],
+    phoneNumber: [''],
+    description: [''],
+    zipCode: ['', Validators.required],
+    street: ['', Validators.required],
+    number: [''],
+    neighborhood: ['', Validators.required],
+    complement: [''],
+    city: ['', Validators.required],
+    state: ['', Validators.required],
+    country: ['', Validators.required],
+  });
+
+  private readonly formStatus = toSignal(this.form.statusChanges, {
+    initialValue: this.form.status,
+  });
+
+  protected readonly isSubmitEnabled = computed(() => {
+    if (this.formMode() === 'create') {
+      return this.formStatus() === 'VALID';
+    }
+    return this.formStatus() === 'VALID';
+  });
+
+  ngOnInit(): void {
+    this.usageService.refresh();
+
+    this.authService.getAdminMe().subscribe({
+      next: (admin) => {
+        this.adminId = admin.id;
+        this.clubService.getAllByAdminId(this.adminId).subscribe();
+      },
+      error: (err: unknown) => {
+        console.error('Não foi possível obter o perfil do administrador.', err);
+      },
+    });
+
+    this.form.controls.zipCode.valueChanges
+      .pipe(
+        map((value) => (value ?? '').replace(/\D/g, '')),
+        distinctUntilChanged(),
+        debounceTime(300),
+        filter((cep) => cep.length === 8),
+        switchMap((cep) => this.viaCepService.getAddressByCep(cep)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (address) => {
+          if (address.erro) {
+            return;
+          }
+
+          this.form.patchValue({
+            street: address.logradouro,
+            neighborhood: address.bairro,
+            city: address.localidade,
+            state: address.uf,
+            complement: address.complemento,
+          });
+        },
+        error: (err: unknown) => {
+          console.error('Erro ao buscar CEP', err);
+        },
+      });
+  }
+
+  // --- Navigation ---
+
+  protected goToCourts(clubId: string): void {
+    this.router.navigate(['/admin/club', clubId, 'dashboard']);
+  }
+
+  // --- Form actions ---
+
+  protected openCreate(): void {
+    if (!this.canCreateClub()) {
+      this.showLimitToast();
+      return;
+    }
+
+    this.form.reset({
+      name: '',
+      phoneNumber: '',
+      description: '',
+      zipCode: '',
+      street: '',
+      number: '',
+      neighborhood: '',
+      complement: '',
+      city: '',
+      state: '',
+      country: CountryEnum.Brasil,
+    });
+    this.selectedFiles.set([]);
+    this.formMode.set('create');
+  }
+
+  protected closeForm(): void {
+    this.formMode.set(null);
+    this.form.reset();
+  }
+
+  protected onFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files) {
+      this.selectedFiles.set(Array.from(input.files));
+    }
+  }
+
+  protected removeFile(index: number): void {
+    this.selectedFiles.update((files) => files.filter((_, i) => i !== index));
+  }
+
+  protected onSubmit(): void {
+    if (!this.isSubmitEnabled()) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    if (this.formMode() === 'create') {
+      this.submitCreate();
+    } else {
+      return;
+    }
+  }
+
+  private submitCreate(): void {
+    if (this.adminId) {
+      this.dispatchCreate(this.adminId);
+      return;
+    }
+
+    this.authService.getAdminMe().subscribe({
+      next: (admin) => {
+        this.adminId = admin.id;
+        this.dispatchCreate(admin.id);
+      },
+      error: (err: unknown) => {
+        console.error('Não foi possível obter o perfil do administrador.', err);
+      },
+    });
+  }
+  protected isToggleBlocked(club: ResponseClubDTO): boolean {
+    return this.togglingIds().has(club.id) || (!club.isClubActive && this.limitReached());
+  }
+  protected onToggleActive(club: ResponseClubDTO, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (this.togglingIds().has(club.id)) return;
+
+    this.togglingIds.update((ids) => new Set(ids).add(club.id));
+
+    this.clubService
+      .toggleActive(club.id)
+      .pipe(
+        finalize(() =>
+          this.togglingIds.update((ids) => {
+            const next = new Set(ids);
+            next.delete(club.id);
+            return next;
+          }),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.usageService.refresh();
+          this.toast.set({
+            message: club.isClubActive ? 'Clube desativado.' : 'Clube ativado.',
+            type: 'success',
+          });
+        },
+        error: (err: unknown) => {
+          // o checkbox já mudou visualmente; volta para o valor real
+          input.checked = club.isClubActive;
+          this.clubService.clearError();
+          this.toast.set({
+            message: getApiErrorMessage(err),
+            type: isLimitExceededError(err) ? 'warning' : 'error',
+          });
+        },
+      });
+  }
+
+  private dispatchCreate(adminId: string): void {
+    const {
+      name,
+      phoneNumber,
+      description,
+      zipCode,
+      street,
+      number,
+      neighborhood,
+      complement,
+      city,
+      state,
+      country,
+    } = this.form.getRawValue();
+
+    this.clubService
+      .create({
+        adminId,
+        name: name!,
+        phoneNumber: phoneNumber ?? undefined,
+        description: description ?? undefined,
+        zipCode: zipCode!,
+        street: street!,
+        number: number ?? undefined,
+        neighborhood: neighborhood!,
+        complement: complement ?? undefined,
+        city: city!,
+        state: state!,
+        country: country!,
+        images: this.selectedFiles() ?? undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.closeForm();
+          this.clubService.getAllByAdminId(adminId).subscribe();
+          this.usageService.refresh();
+        },
+        error: (err: unknown) => {
+          if (isLimitExceededError(err)) {
+            this.closeForm();
+            this.clubService.clearError();
+            this.showLimitToast(getApiErrorMessage(err));
+            this.usageService.refresh();
+            return;
+          }
+          console.error('Erro ao criar clube', err);
+          this.toast.set({ message: getApiErrorMessage(err), type: 'error' });
+        },
+      });
+  }
+
+  protected fieldInvalid(field: string): boolean {
+    const ctrl = this.form.get(field);
+    return !!(ctrl?.invalid && ctrl?.touched);
+  }
+}

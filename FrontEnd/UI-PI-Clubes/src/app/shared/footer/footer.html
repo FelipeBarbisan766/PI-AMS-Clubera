@@ -1,0 +1,26 @@
+<footer class="footer sm:footer-horizontal bg-neutral text-white text-base-content p-10">
+  <aside>
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12">
+        <img src="/logo.png" alt="">
+      </div>
+      <span class="font-destaque font-bold text-xl">Clubera</span>
+    </div>
+
+    <p> 
+      A plataforma mais fácil para reservar quadras esportivas.
+    </p>
+  </aside>
+  <nav>
+    <h6 class="footer-title">Navegação</h6>
+    <a [routerLink]="['/']" class="link link-hover">Início</a>
+    <a [routerLink]="['/clubs']" class="link link-hover">Clubes</a>
+    <a [routerLink]="['/courts']" class="link link-hover">Quadras</a>
+    <a [routerLink]="['/terms']" class="link link-hover">Política de Privacidade e Termos de Uso</a>
+  </nav>
+  <nav>
+    <h6 class="footer-title">Para clubes</h6>
+    <a [routerLink]="['/register-club']" class="link link-hover">Cadastre seu clube</a>
+    <a [routerLink]="['/register-club']" class="link link-hover">Gerencie suas quadras</a>
+  </nav>
+</footer>

@@ -1,0 +1,223 @@
+<main
+  class="min-h-screen w-full pattern-background flex items-center justify-center px-4 py-12 pt-20"
+>
+  <section class="card bg-base-100 shadow-sm w-full max-w-2xl" aria-labelledby="payment-title">
+    <div class="card-body">
+
+      <!-- STEP: review -->
+      @if (step() === 'review') {
+        <header class="text-center mb-6 max-w-xl mx-auto">
+          <h1 id="payment-title" class="text-3xl md:text-4xl font-bold mb-3">Finalizar assinatura</h1>
+          <p class="text-sm md:text-base text-base-content/70">
+            Confira o plano escolhido. Você vai escolher a forma de pagamento na tela do Mercado Pago.
+          </p>
+        </header>
+
+        @if (selectedPlan(); as plan) {
+          <div class="bg-base-200 rounded-2xl p-4 mb-6 max-w-md mx-auto w-full">
+            <div class="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p class="font-semibold">{{ plan.name }}</p>
+                <p class="text-xs text-base-content/60">
+                  {{ plan.quantClub }} {{ plan.quantClub === 1 ? 'clube' : 'clubes' }}
+                  · {{ plan.quantCourt }} quadras por clube
+                </p>
+              </div>
+              <p class="text-xl font-bold text-primary">{{ formatPrice(plan.price) }}</p>
+            </div>
+          </div>
+        } @else {
+          <div class="flex justify-center py-6" role="status" aria-live="polite">
+            <span class="loading loading-spinner loading-md text-primary" aria-hidden="true"></span>
+            <span class="sr-only">Carregando plano...</span>
+          </div>
+        }
+
+        @if (errorMessage()) {
+          <div class="alert alert-error max-w-md mx-auto w-full mb-4" role="alert" aria-live="assertive">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+            <span>{{ errorMessage() }}</span>
+          </div>
+        }
+
+        @if (hasActiveSubscriptionConflict()) {
+          <div class="grid grid-cols-1 gap-3 w-full max-w-md mx-auto mb-4">
+            <button type="button" class="btn btn-outline rounded-full w-full" (click)="goToSubscription()">
+              Ver minha assinatura
+            </button>
+          </div>
+        }
+
+        <div class="grid grid-cols-1 gap-3 w-full max-w-md mx-auto">
+          <button
+            type="button"
+            class="btn btn-primary rounded-full text-white w-full"
+            [disabled]="!canSubmit()"
+            [attr.aria-busy]="isLoading()"
+            (click)="initiatePayment()"
+          >
+            Ir para o checkout
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+            </svg>
+          </button>
+          <button type="button" class="btn btn-outline rounded-full w-full" (click)="goToPricing()">
+            Voltar para planos
+          </button>
+        </div>
+      }
+
+      <!-- STEP: redirecting -->
+      @if (step() === 'redirecting') {
+        <div class="flex flex-col items-center justify-center py-12 gap-4" role="status" aria-live="polite">
+          <span class="loading loading-spinner loading-lg text-primary" aria-hidden="true"></span>
+          <p class="text-base-content/70 text-sm">Redirecionando para o Mercado Pago...</p>
+        </div>
+      }
+
+      <!-- STEP: success (página de retorno; só acompanha, quem confirma é o webhook) -->
+      @if (step() === 'success') {
+        <header class="text-center mb-6 max-w-xl mx-auto">
+          <div class="flex justify-center mb-4" aria-hidden="true">
+            @switch (paymentStatus()) {
+              @case ('Confirmed') {
+                <div class="bg-success/10 rounded-full p-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+              }
+              @case ('Failed') {
+                <div class="bg-error/10 rounded-full p-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </div>
+              }
+              @default {
+                <div class="bg-warning/10 rounded-full p-4">
+                  @if (isPolling()) {
+                    <span class="loading loading-spinner loading-md text-warning"></span>
+                  } @else {
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                  }
+                </div>
+              }
+            }
+          </div>
+
+          <h1 id="payment-title" class="text-3xl md:text-4xl font-bold mb-3">
+            @switch (paymentStatus()) {
+              @case ('Confirmed') { Assinatura ativada! }
+              @case ('Failed') { Pagamento não aprovado }
+              @case ('Unknown') { Nenhum pagamento em andamento }
+              @default { Confirmando seu pagamento... }
+            }
+          </h1>
+
+          <div aria-live="polite">
+            @switch (paymentStatus()) {
+              @case ('Confirmed') {
+                <p class="text-sm md:text-base text-success">
+                  Seu pagamento foi confirmado e sua assinatura está ativa.
+                </p>
+              }
+              @case ('Failed') {
+                <p class="text-sm md:text-base text-error">
+                  O pagamento não foi aprovado. Você pode tentar novamente.
+                </p>
+              }
+              @case ('Unknown') {
+                <p class="text-sm md:text-base text-base-content/70">
+                  Não encontramos um pagamento para acompanhar. Veja sua assinatura ou escolha um plano.
+                </p>
+              }
+              @default {
+                @if (pollTimedOut()) {
+                  <p class="text-sm md:text-base text-base-content/70">
+                    Ainda estamos aguardando a confirmação. Você pode acompanhar em
+                    "Minha assinatura", no histórico de pagamentos.
+                  </p>
+                } @else {
+                  <p class="text-sm md:text-base text-base-content/70">
+                    Isso pode levar alguns segundos.
+                  </p>
+                }
+              }
+            }
+          </div>
+        </header>
+
+        <div class="grid grid-cols-1 gap-3 w-full max-w-md mx-auto">
+          @if (paymentStatus() === 'Failed') {
+            <button type="button" class="btn btn-primary rounded-full text-white w-full" (click)="retryPayment()">
+              Tentar novamente
+            </button>
+          } @else if (paymentStatus() === 'Confirmed' || paymentStatus() === 'Unknown' || pollTimedOut()) {
+            <button type="button" class="btn btn-primary rounded-full text-white w-full" (click)="goToSubscription()">
+              Ver minha assinatura
+            </button>
+          }
+        </div>
+      }
+
+      <!-- STEP: pending (Pix/boleto aguardando) -->
+      @if (step() === 'pending') {
+        <header class="text-center mb-6 max-w-xl mx-auto">
+          <div class="flex justify-center mb-4" aria-hidden="true">
+            <div class="bg-warning/10 rounded-full p-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+          </div>
+          <h1 id="payment-title" class="text-3xl md:text-4xl font-bold mb-3">Pagamento pendente</h1>
+          <p class="text-sm md:text-base text-base-content/70" aria-live="polite">
+            Seu pagamento está em análise ou aguardando (Pix/boleto). Assim que for confirmado, a
+            assinatura é ativada automaticamente. Acompanhe pelo histórico de pagamentos.
+          </p>
+        </header>
+        <div class="grid grid-cols-1 gap-3 w-full max-w-md mx-auto">
+          <button type="button" class="btn btn-primary rounded-full text-white w-full" (click)="goToSubscription()">
+            Ver minha assinatura
+          </button>
+          <button type="button" class="btn btn-outline rounded-full w-full" (click)="goToPricing()">
+            Voltar para planos
+          </button>
+        </div>
+      }
+
+      <!-- STEP: failure -->
+      @if (step() === 'failure') {
+        <header class="text-center mb-6 max-w-xl mx-auto">
+          <div class="flex justify-center mb-4" aria-hidden="true">
+            <div class="bg-error/10 rounded-full p-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              </svg>
+            </div>
+          </div>
+          <h1 id="payment-title" class="text-3xl md:text-4xl font-bold mb-3">Pagamento não concluído</h1>
+          <p class="text-sm md:text-base text-base-content/70" aria-live="assertive">
+            Não foi possível processar o seu pagamento. Tente novamente.
+          </p>
+        </header>
+        <div class="grid grid-cols-1 gap-3 w-full max-w-md mx-auto">
+          <button type="button" class="btn btn-primary rounded-full text-white w-full" (click)="retryPayment()">
+            Tentar novamente
+          </button>
+          <button type="button" class="btn btn-outline rounded-full w-full" (click)="goToPricing()">
+            Voltar para planos
+          </button>
+        </div>
+      }
+
+    </div>
+  </section>
+</main>

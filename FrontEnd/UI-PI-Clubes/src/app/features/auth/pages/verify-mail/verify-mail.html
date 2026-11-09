@@ -1,0 +1,135 @@
+<main
+  class="min-h-screen w-full pattern-background flex items-center justify-center px-4 py-12 pt-20"
+>
+  <section class="card bg-base-100 shadow-sm w-full max-w-2xl" aria-labelledby="verify-mail-title">
+    <div class="card-body">
+      <header class="text-center mb-6 max-w-xl mx-auto">
+        <h1 id="verify-mail-title" class="text-3xl md:text-4xl font-bold mb-3">
+          Verificação de e-mail
+        </h1>
+
+        @if (status() === 'pending') {
+          @if (isEmailChange()) {
+            <p class="text-sm md:text-base" aria-live="polite">
+              Enviamos um link de confirmação para o seu novo e-mail. Clique nele para concluir a
+              alteração. Até lá, não será possível entrar na sua conta.
+            </p>
+          } @else {
+            <p class="text-sm md:text-base" aria-live="polite">
+              Enviamos um link de verificação para seu e-mail. Acesse sua caixa de entrada e clique
+              no link para ativar sua conta.
+            </p>
+          }
+        }
+
+        @if (status() === 'loading') {
+          <p class="text-sm md:text-base" aria-live="polite">
+            Validando seu link de verificação...
+          </p>
+        }
+
+        @if (status() === 'success') {
+          <p class="text-sm md:text-base text-success" aria-live="polite">
+            {{ successMessage() }}
+          </p>
+        }
+
+        @if (status() === 'error') {
+          <p class="text-sm md:text-base text-error" aria-live="assertive">
+            {{ errorMessage() }}
+          </p>
+        }
+
+        @if (status() === 'InputResendEmail') {
+          <p class="text-sm md:text-base text-base" aria-live="polite">
+            Para poder reenviar o link de verificação, Precisamos que digite seu e-mail novamente.
+          </p>
+          <form [formGroup]="emailForm" class="flex flex-col gap-4 w-full max-w-md mx-auto">
+            <input
+              type="email"
+              formControlName="email"
+              placeholder="Digite seu e-mail"
+              class="input input-bordered w-full"
+              required
+            />
+            <button
+              type="button"
+              (click)="resendVerificationEmail()"
+              class="btn btn-primary rounded-full text-white w-full"
+              aria-label="Reenviar verificação"
+            >
+              Reenviar verificação
+            </button>
+          </form>
+        }
+
+        @if (status() === 'resendSuccess') {
+          <p class="text-sm md:text-base text-success" aria-live="polite">
+            Enviamos um novo link de verificação para seu e-mail. Acesse sua caixa de entrada e
+            clique no link para ativar sua conta.
+          </p>
+        }
+      </header>
+
+      <div class="grid grid-cols-1 gap-4 w-full max-w-md mx-auto">
+        @if (status() === 'pending') {
+          <a
+            (click)="goToLogin()"
+            class="btn btn-outline rounded-full w-full"
+            aria-label="Ir para login"
+          >
+            Ir para login
+          </a>
+          @if (!isEmailChange()) {
+            <a
+              (click)="requestResendEmail()"
+              class="btn btn-primary rounded-full text-white w-full"
+              aria-label="Reenviar verificação"
+            >
+              Reenviar verificação
+            </a>
+          }
+        }
+
+        @if (status() === 'loading') {
+          <button
+            type="button"
+            class="btn btn-primary rounded-full text-white w-full"
+            disabled
+            aria-busy="true"
+            aria-label="Validação em andamento"
+          >
+            Validando...
+          </button>
+        }
+
+        @if (status() === 'success') {
+          <a
+            (click)="goToLogin()"
+            class="btn btn-primary rounded-full text-white w-full"
+            aria-label="Ir para login"
+          >
+            Ir para login
+          </a>
+        }
+
+        @if (status() === 'error') {
+          <a
+            class="btn btn-primary rounded-full text-white w-full"
+            aria-label="Reenviar verificação"
+          >
+            Reenviar verificação
+          </a>
+
+          <a
+            (click)="goToLogin()"
+            class="btn btn-outline rounded-full w-full"
+            aria-label="Voltar para login"
+          >
+            Voltar para login
+          </a>
+        }
+      </div>
+    </div>
+  </section>
+</main>
