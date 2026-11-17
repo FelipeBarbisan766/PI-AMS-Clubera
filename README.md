@@ -10,6 +10,8 @@ O **Clubera** é uma plataforma web que centraliza o gerenciamento de clubes, qu
 - **Frontend:** interface web em **Angular 21** com **Tailwind CSS** e **daisyUI**.
 - **API:** API REST em **.NET 10** com **Entity Framework Core** e **SQL Server**.
 
+> Documentação do [FrontEnd](Web/UI-PI-Clubes/README.md) | Documentação do [BackEnd](Back/API-PI-Clubes/README.md)
+
 ---
 
 ## Sobre o projeto
