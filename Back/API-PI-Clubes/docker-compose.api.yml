@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Subir:
 #   docker compose -f docker-compose.api.yml --env-file .env pull
 #   docker compose -f docker-compose.api.yml --env-file .env up -d
@@ -15,8 +13,16 @@ services:
     volumes:
       - /DATA/AppData/homelab-api-uploads:/app/wwwroot/uploads
     environment:
+      
       ASPNETCORE_ENVIRONMENT: "${ASPNETCORE_ENVIRONMENT:-Production}"
       ConnectionStrings__DefaultConnection: "Server=sqlserver-clubes,1433;Database=ClubesDB;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True"
+
+      SETTINGS_MASTER_KEY: "${SETTINGS_MASTER_KEY:?defina SETTINGS_MASTER_KEY no .env}"
+
+      Security__CpfEncryptionKey: "${CPF_ENCRYPTION_KEY}"
+      Security__CpfHmacKey: "${CPF_HMAC_KEY}"
+
+      AllowedHosts: "*"
 
       # --- Jwt ---
       Jwt__Key: "${JWT_KEY}"
@@ -28,10 +34,6 @@ services:
       Jwt__ResetPasswordKey: "${JWT_RESET_PASSWORD_KEY}"
       Jwt__ExpirationResetPassword: "15"
 
-      # --- Security ---
-      Security__CpfEncryptionKey: "${CPF_ENCRYPTION_KEY}"
-      Security__CpfHmacKey: "${CPF_HMAC_KEY}"
-
       # --- Email ---
       Email__SenderEmail: "${EMAIL_SENDER}"
       Email__SenderName: "Clube PI"
@@ -42,7 +44,7 @@ services:
       Email__EnableSsl: "true"
       Email__BaseUrl: "${PUBLIC_BASE_URL}"
 
-      # --- AzureStorage (so preenche de verdade se for usar; senao deixa vazio) ---
+      # --- AzureStorage ---
       AzureStorage__ConnectionString: "${AZURE_STORAGE_CONNECTION_STRING}"
       AzureStorage__ContainerName: "image"
 
@@ -57,19 +59,22 @@ services:
       MercadoPago__BackUrls__Failure: "${PUBLIC_BASE_URL}/payment/failure"
       MercadoPago__BackUrls__Pending: "${PUBLIC_BASE_URL}/payment/pending"
 
-      # --- Storage local (arquivos enviados) ---
+      # --- Storage local  ---
       LocalStorage__BaseUrl: "${API_BASE_URL}"
       Storage__Provider: "Local"
 
-      # --- Outros ---
-      ReserveCleanup__RetentionMonths: "6"
+      # --- Booking ---
       Booking__BookingCutoffMinutes: "10"
       Booking__CancellationCutoffMinutes: "10"
       Booking__TimeZoneId: "America/Sao_Paulo"
+
+      # --- Share ---
       Share__FrontendBaseUrl: "https://www.clubera.dev"
       Share__ApiPublicBaseUrl: "https://api.clubera.dev"
       Share__AllowedImageHosts__0: "api.clubera.dev"
-      AllowedHosts: "*"
+
+      # --- Outros ---
+      ReserveCleanup__RetentionMonths: "6"
     networks:
       - homelab-network
 

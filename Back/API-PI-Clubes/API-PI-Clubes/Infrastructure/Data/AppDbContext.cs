@@ -29,7 +29,7 @@ namespace API_PI_Clubes.Infrastructure.Data
         public DbSet<FlagPlayer> FlagPlayers { get; set; }
         public DbSet<ClubReview> ClubReviews { get; set; }
 
-
+        public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

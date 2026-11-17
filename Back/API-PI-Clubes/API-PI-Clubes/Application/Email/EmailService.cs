@@ -10,9 +10,9 @@ public class EmailService : IEmailService
     private readonly ILogger<EmailService> _logger;
     private readonly EmailBodyService _emailBodyService;
 
-    public EmailService(IOptions<EmailSettings> settings, ILogger<EmailService> logger, EmailBodyService emailBodyService)
+    public EmailService(IOptionsSnapshot<EmailSettings> options, ILogger<EmailService> logger, EmailBodyService emailBodyService)
     {
-        _settings = settings.Value;
+        _settings = options.Value;
         _logger = logger;
         _emailBodyService = emailBodyService;
     }
